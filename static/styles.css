@@ -1,0 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+    --bg-main: #0B0F19;
+    --bg-card: #111827;
+    --bg-card-hover: #1F2937;
+    --bg-input: #1A2234;
+    --border-color: #232F48;
+    --border-focus: #3B82F6;
+    --text-primary: #F3F4F6;
+    --text-secondary: #9CA3AF;
+    --text-muted: #6B7280;
+    --accent-blue: #3B82F6;
+    --accent-blue-hover: #2563EB;
+    --accent-green: #10B981;
+    --accent-amber: #F59E0B;
+    --accent-red: #EF4444;
+    --accent-purple: #8B5CF6;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #0d121f;
+}
+::-webkit-scrollbar-thumb {
+    background: #25334d;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #374a6d;
+}
+
+.glass-card {
+    background: rgba(17, 24, 39, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glow-blue {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.25);
+}
+
+.glow-green {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+}
+
+.code-font {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Pulse indicator animation */
+@keyframes pulse-dot {
+    0% { transform: scale(0.95); opacity: 0.7; }
+    50% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(0.95); opacity: 0.7; }
+}
+
+.pulse-active {
+    animation: pulse-dot 2s infinite ease-in-out;
+}
+
+/* Dropzone drag hover */
+.dropzone-active {
+    border-color: var(--accent-blue) !important;
+    background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+/* Tag Pills */
+.tag-pill {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #94a3b8;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.tag-pill:hover {
+    background: #3b82f6;
+    color: #ffffff;
+    border-color: #60a5fa;
+}
+
+/* Smooth transitions */
+button, input, select, textarea {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}

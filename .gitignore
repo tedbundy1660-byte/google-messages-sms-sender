@@ -1,0 +1,24 @@
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+
+# User session data & Google Authentication Profile (CRITICAL: Do not commit credentials)
+user_data/
+*.session
+
+# Debug screenshots & logs
+debug/
+*.log
+
+# Environment variables
+.env
+.venv/
+env/
+venv/
+ENV/
+
+# OS Specific
+.DS_Store
+Thumbs.db
