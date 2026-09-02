@@ -8,8 +8,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Dismiss modal overlays / prompts (e.g. "Got it", "OK", "Dismiss")
 function dismissPopups() {
-    const popups = document.querySelectorAll('button');
-    for (const btn of popups) {
+    const buttons = document.querySelectorAll('button');
+    for (const btn of buttons) {
         const txt = (btn.innerText || '').trim().toLowerCase();
         if (['got it', 'ok', 'dismiss', 'continue', 'not now'].includes(txt)) {
             if (btn.offsetWidth > 0 && btn.offsetHeight > 0) {
@@ -19,8 +19,52 @@ function dismissPopups() {
     }
 }
 
+// Full mouse/pointer/touch event dispatcher
+function simulateClick(el) {
+    if (!el) return;
+    try {
+        el.scrollIntoView?.({ block: 'center', inline: 'center' });
+        el.focus?.();
+        
+        const rect = el.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+
+        const opts = {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            clientX: x,
+            clientY: y,
+            screenX: x,
+            screenY: y,
+            buttons: 1
+        };
+
+        el.dispatchEvent(new PointerEvent('pointerdown', opts));
+        el.dispatchEvent(new MouseEvent('mousedown', opts));
+        el.dispatchEvent(new PointerEvent('pointerup', opts));
+        el.dispatchEvent(new MouseEvent('mouseup', opts));
+        el.dispatchEvent(new MouseEvent('click', opts));
+        el.click?.();
+    } catch (e) {
+        try { el.click?.(); } catch (err) {}
+    }
+}
+
+// Type value with native input and change event triggers
+function simulateInput(inputEl, text) {
+    if (!inputEl) return;
+    inputEl.focus();
+    inputEl.value = '';
+    inputEl.value = text;
+    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+    inputEl.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+}
+
 // Find element with polling
-async function waitForElement(selectors, timeoutMs = 8000) {
+async function waitForElement(selectors, timeoutMs = 6000) {
     const start = Date.now();
     const selectorList = Array.isArray(selectors) ? selectors : [selectors];
 
@@ -31,34 +75,11 @@ async function waitForElement(selectors, timeoutMs = 8000) {
                 if (el && (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0)) {
                     return el;
                 }
-            } catch (e) {
-                // Invalid selector syntax fallback
-            }
+            } catch (e) {}
         }
-        await sleep(250);
+        await sleep(200);
     }
     return null;
-}
-
-// Full mouse/pointer event dispatcher
-function simulateClick(el) {
-    if (!el) return;
-    el.focus?.();
-    const opts = { bubbles: true, cancelable: true, view: window };
-    el.dispatchEvent(new PointerEvent('pointerdown', opts));
-    el.dispatchEvent(new MouseEvent('mousedown', opts));
-    el.dispatchEvent(new PointerEvent('pointerup', opts));
-    el.dispatchEvent(new MouseEvent('mouseup', opts));
-    el.dispatchEvent(new MouseEvent('click', opts));
-    el.click?.();
-}
-
-// Type value with native input event triggers
-function simulateInput(inputEl, text) {
-    inputEl.focus();
-    inputEl.value = text;
-    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-    inputEl.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 // Check if user is logged into Google Messages Web
@@ -68,13 +89,13 @@ function checkPageStatus() {
         return { isReady: false, reason: 'Not on Google Messages Web tab' };
     }
 
-    const startChatBtn = document.querySelector('a[data-e2e-start-chat], a[href*="start-chat"], button:has-text("Start chat"), mws-fab a');
-    const convList = document.querySelector('mws-conversations-list, div[role="list"]');
     const qrCode = document.querySelector('mw-qr-code, qr-code, img[alt*="QR"]');
-
     if (qrCode) {
         return { isReady: false, reason: 'Google Messages requires QR code pairing' };
     }
+
+    const startChatBtn = document.querySelector('a[data-e2e-start-chat], a[href*="start-chat"], button:has-text("Start chat"), mws-fab a');
+    const convList = document.querySelector('mws-conversations-list, div[role="list"]');
 
     if (startChatBtn || convList || window.location.href.includes('conversations')) {
         return { isReady: true, reason: 'Google Messages is ready' };
@@ -83,166 +104,7 @@ function checkPageStatus() {
     return { isReady: false, reason: 'Loading Google Messages...' };
 }
 
-// Core SMS Sender function
-async function sendSms(phone, message) {
-    dismissPopups();
-
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const last7 = cleanPhone.slice(-7);
-
-    // 1. Check if conversation is already in sidebar
-    let sidebarOpened = false;
-    const sidebarItems = document.querySelectorAll('mws-conversation-list-item, a[href*="/web/conversations/"]');
-    for (const item of sidebarItems) {
-        const txt = (item.innerText || '').replace(/[^0-9]/g, '');
-        if (last7 && txt.includes(last7)) {
-            simulateClick(item);
-            sidebarOpened = true;
-            await sleep(1200);
-            break;
-        }
-    }
-
-    if (!sidebarOpened) {
-        // 2. Click "Start chat"
-        const startChatSelectors = [
-            'a[data-e2e-start-chat]',
-            'a[href*="start-chat"]',
-            'a[href*="/web/conversations/new"]',
-            'mws-fab a',
-            'mws-fab button',
-            'button[aria-label*="Start chat" i]',
-            'a[aria-label*="Start chat" i]'
-        ];
-
-        let startChatBtn = await waitForElement(startChatSelectors, 4000);
-        if (startChatBtn) {
-            simulateClick(startChatBtn);
-            await sleep(1000);
-        } else if (!window.location.href.includes('/new')) {
-            window.location.href = 'https://messages.google.com/web/conversations/new';
-            await sleep(1500);
-        }
-
-        // 3. Find recipient search input
-        const recipientSelectors = [
-            'input[data-e2e-contact-input]',
-            'input[placeholder*="name, phone" i]',
-            'input[placeholder*="phone number" i]',
-            'input[placeholder*="Type a name" i]',
-            'input[aria-label*="recipient" i]',
-            'input[aria-label*="phone number" i]',
-            'mws-contact-picker input',
-            'input[type="text"]',
-            'input'
-        ];
-
-        const recipientInput = await waitForElement(recipientSelectors, 6000);
-        if (!recipientInput) {
-            return { success: false, error: 'Could not find recipient search input field' };
-        }
-
-        // Type recipient number
-        recipientInput.focus();
-        recipientInput.value = '';
-        simulateInput(recipientInput, phone);
-        await sleep(1200);
-
-        // 4. Select contact from suggestion list (run adaptive loop)
-        let composerFound = null;
-        for (let attempt = 1; attempt <= 6; attempt++) {
-            composerFound = findComposer();
-            if (composerFound) break;
-
-            // Strategy A: Click elements matching 'Send to'
-            const candidateItems = document.querySelectorAll('mws-contact-list-item, [role="option"], mat-list-item, div.contact, button, div');
-            for (const el of candidateItems) {
-                const txt = (el.innerText || '').trim();
-                if (txt.includes('Send to') && el.offsetHeight > 15 && el.offsetHeight < 150) {
-                    simulateClick(el);
-                }
-            }
-
-            // Strategy B: Keyboard ArrowDown + Enter
-            recipientInput.focus();
-            recipientInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
-            await sleep(150);
-            recipientInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-            await sleep(150);
-            recipientInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-
-            await sleep(800);
-            dismissPopups();
-        }
-    }
-
-    // 5. Find message composer
-    const composer = await waitForComposer(6000);
-    if (!composer) {
-        return { success: false, error: 'Could not locate message composer input' };
-    }
-
-    // 6. Enter message into composer
-    composer.focus();
-    await sleep(200);
-
-    const isContentEditable = composer.getAttribute('contenteditable') === 'true' || composer.tagName.toLowerCase() === 'div';
-    if (isContentEditable) {
-        composer.innerText = message;
-        document.execCommand('insertText', false, message);
-        composer.dispatchEvent(new Event('input', { bubbles: true }));
-    } else {
-        composer.value = message;
-        composer.dispatchEvent(new Event('input', { bubbles: true }));
-        composer.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    await sleep(600);
-
-    // 7. Click Send Button
-    const sendButtonSelectors = [
-        'button[data-e2e-send-text-button]',
-        'button[aria-label*="Send SMS" i]',
-        'button[aria-label*="Send RCS" i]',
-        'button[aria-label*="Send message" i]',
-        'button[aria-label*="Send" i]',
-        'mws-message-send-button button',
-        'mws-message-send-button',
-        'div[data-e2e-send-text-button]'
-    ];
-
-    let sendBtn = null;
-    for (const sel of sendButtonSelectors) {
-        const btn = document.querySelector(sel);
-        if (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0) && !btn.disabled) {
-            sendBtn = btn;
-            break;
-        }
-    }
-
-    if (sendBtn) {
-        simulateClick(sendBtn);
-    } else {
-        // Fallback: Press Enter key in composer
-        composer.focus();
-        composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-    }
-
-    await sleep(2500);
-
-    // 8. Check for any error notices
-    const errorNotices = document.querySelectorAll('div, span');
-    for (const notice of errorNotices) {
-        const t = (notice.innerText || '').toLowerCase();
-        if (t.includes('trouble sending') || t.includes('message not sent') || t.includes('failed to send') || t.includes('not delivered')) {
-            if (notice.offsetWidth > 0 && notice.offsetHeight > 0) {
-                return { success: false, error: notice.innerText.trim() };
-            }
-        }
-    }
-
-    return { success: true };
-}
-
+// Find message composer in the active conversation
 function findComposer() {
     const composerSelectors = [
         'mws-autosize-textarea textarea',
@@ -258,28 +120,226 @@ function findComposer() {
         'div[contenteditable="true"][aria-label*="message" i]',
         'div[contenteditable="true"]',
         '[role="textbox"]',
+        'div.rich-textarea',
+        'mws-autosize-textarea',
         'textarea'
     ];
 
     for (const sel of composerSelectors) {
         const els = document.querySelectorAll(sel);
         for (const el of els) {
+            // Make sure composer is in the bottom pane and visible
             if (el && (el.offsetWidth > 0 || el.offsetHeight > 0)) {
-                return el;
+                // Ensure it's not the recipient search input
+                const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+                const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+                if (!placeholder.includes('phone') && !placeholder.includes('name') && !ariaLabel.includes('recipient')) {
+                    return el;
+                }
             }
         }
     }
     return null;
 }
 
-async function waitForComposer(timeoutMs = 6000) {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-        const comp = findComposer();
-        if (comp) return comp;
-        await sleep(300);
+// Helper to click the 'Send to [number]' dropdown suggestion
+function clickSendToSuggestion(phone) {
+    // 1. Direct query of Google Messages custom list item
+    const customItem = document.querySelector('mws-contact-list-item, [role="option"], mat-list-item');
+    if (customItem && (customItem.innerText || '').includes('Send to')) {
+        simulateClick(customItem);
+        return true;
     }
-    return null;
+
+    // 2. Query leaf elements with text "Send to"
+    const all = document.querySelectorAll('*');
+    for (const el of all) {
+        if (el.innerText && el.innerText.includes('Send to') && el.children.length === 0) {
+            const target = el.closest('mws-contact-list-item, [role="option"], mat-list-item, div.contact, button') || el.parentElement || el;
+            simulateClick(target);
+            return true;
+        }
+    }
+    return false;
+}
+
+// Core SMS Sender function
+async function sendSms(phone, message) {
+    dismissPopups();
+
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const last7 = cleanPhone.slice(-7);
+
+    // Check if the conversation with this recipient is ALREADY open
+    const currentHeader = document.querySelector('mws-conversation-header, div[role="region"] header');
+    const headerDigits = (currentHeader ? currentHeader.innerText : '').replace(/[^0-9]/g, '');
+    let alreadyOpen = last7 && headerDigits.includes(last7);
+
+    let composer = null;
+    if (alreadyOpen) {
+        composer = findComposer();
+    }
+
+    if (!composer) {
+        // Check if recipient input is already on screen (in New Conversation view)
+        let recipientInput = document.querySelector('input[data-e2e-contact-input], input[placeholder*="name, phone" i], input[placeholder*="phone number" i], mws-contact-picker input, input[type="text"]');
+
+        if (!recipientInput) {
+            // Check if existing conversation is in sidebar
+            let sidebarFound = false;
+            const sidebarItems = document.querySelectorAll('mws-conversation-list-item, a[href*="/web/conversations/"]');
+            for (const item of sidebarItems) {
+                const txt = (item.innerText || '').replace(/[^0-9]/g, '');
+                if (last7 && txt.includes(last7)) {
+                    simulateClick(item);
+                    sidebarFound = true;
+                    await sleep(1500);
+                    break;
+                }
+            }
+
+            if (sidebarFound) {
+                composer = findComposer();
+            }
+
+            if (!composer) {
+                // Click "Start chat"
+                const startChatSelectors = [
+                    'a[data-e2e-start-chat]',
+                    'a[href*="start-chat"]',
+                    'a[href*="/web/conversations/new"]',
+                    'mws-fab a',
+                    'mws-fab button',
+                    'button[aria-label*="Start chat" i]',
+                    'a[aria-label*="Start chat" i]'
+                ];
+
+                const startChatBtn = await waitForElement(startChatSelectors, 3000);
+                if (startChatBtn) {
+                    simulateClick(startChatBtn);
+                    await sleep(1000);
+                } else if (!window.location.href.includes('/new')) {
+                    window.location.href = 'https://messages.google.com/web/conversations/new';
+                    await sleep(1500);
+                }
+
+                // Wait for recipient search input field
+                recipientInput = await waitForElement([
+                    'input[data-e2e-contact-input]',
+                    'input[placeholder*="name, phone" i]',
+                    'input[placeholder*="phone number" i]',
+                    'input[placeholder*="Type a name" i]',
+                    'mws-contact-picker input',
+                    'input[type="text"]',
+                    'input'
+                ], 5000);
+            }
+        }
+
+        // If we have recipient input, type number and select suggestion
+        if (recipientInput && !composer) {
+            recipientInput.focus();
+            simulateInput(recipientInput, phone);
+            await sleep(1000);
+
+            // Active loop to click 'Send to' suggestion
+            for (let attempt = 1; attempt <= 6; attempt++) {
+                composer = findComposer();
+                if (composer) break;
+
+                // Click suggestion
+                clickSendToSuggestion(phone);
+
+                // Keyboard backup: ArrowDown + Enter
+                recipientInput.focus();
+                recipientInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true }));
+                await sleep(150);
+                recipientInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                await sleep(150);
+                recipientInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+
+                await sleep(800);
+                dismissPopups();
+            }
+        }
+    }
+
+    // Final composer location check
+    if (!composer) {
+        // Wait up to 5 more seconds polling
+        const start = Date.now();
+        while (Date.now() - start < 5000) {
+            composer = findComposer();
+            if (composer) break;
+            clickSendToSuggestion(phone);
+            await sleep(300);
+        }
+    }
+
+    if (!composer) {
+        return { success: false, error: 'Could not locate message composer input. Ensure number is valid.' };
+    }
+
+    // Enter message into composer
+    composer.focus();
+    await sleep(200);
+
+    const isContentEditable = composer.getAttribute('contenteditable') === 'true' || composer.tagName.toLowerCase() === 'div';
+    if (isContentEditable) {
+        composer.innerText = message;
+        document.execCommand('insertText', false, message);
+        composer.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+        composer.value = message;
+        composer.dispatchEvent(new Event('input', { bubbles: true }));
+        composer.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    await sleep(600);
+
+    // Click Send Button
+    const sendButtonSelectors = [
+        'button[data-e2e-send-text-button]',
+        'button[aria-label*="Send SMS" i]',
+        'button[aria-label*="Send RCS" i]',
+        'button[aria-label*="Send message" i]',
+        'button[aria-label*="Send" i]',
+        'mws-message-send-button button',
+        'mws-message-send-button',
+        'div[data-e2e-send-text-button]',
+        'button:has(mat-icon:has-text("send"))'
+    ];
+
+    let sendBtn = null;
+    for (const sel of sendButtonSelectors) {
+        const btn = document.querySelector(sel);
+        if (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0) && !btn.disabled) {
+            sendBtn = btn;
+            break;
+        }
+    }
+
+    if (sendBtn) {
+        simulateClick(sendBtn);
+    } else {
+        // Fallback: Press Enter in composer
+        composer.focus();
+        composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+    }
+
+    await sleep(2500);
+
+    // Check for error banners
+    const notices = document.querySelectorAll('div, span');
+    for (const n of notices) {
+        const t = (n.innerText || '').toLowerCase();
+        if (t.includes('trouble sending') || t.includes('message not sent') || t.includes('failed to send') || t.includes('not delivered')) {
+            if (n.offsetWidth > 0 && n.offsetHeight > 0) {
+                return { success: false, error: n.innerText.trim() };
+            }
+        }
+    }
+
+    return { success: true };
 }
 
 // Listen for messages from Side Panel
@@ -291,6 +351,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === 'SEND_SMS') {
         sendSms(request.phone, request.message).then(sendResponse);
-        return true; // Asynchronous response
+        return true;
     }
 });
