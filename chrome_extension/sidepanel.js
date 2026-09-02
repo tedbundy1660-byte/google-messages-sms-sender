@@ -94,6 +94,15 @@ function initEventListeners() {
         }
     });
 
+    // Preset delay buttons
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const min = e.currentTarget.getAttribute('data-min');
+            const max = e.currentTarget.getAttribute('data-max');
+            setDelayPreset(min, max);
+        });
+    });
+
     // Campaign Actions
     document.getElementById('btnStart').addEventListener('click', startCampaign);
     document.getElementById('btnPause').addEventListener('click', pauseCampaign);
