@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Automator</title>
+    <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+
+    <!-- Header & Tab Connection Status -->
+    <div class="card" style="padding: 10px 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="icons/icon-48.png" alt="Logo" style="width: 20px; height: 20px; border-radius: 4px;">
+                <span style="font-weight: 800; font-size: 13px; letter-spacing: -0.02em;">SMS Automator</span>
+            </div>
+            <span id="tabStatusBadge" class="badge badge-amber">Checking Tab...</span>
+        </div>
+        <div id="tabNotice" style="display: none; font-size: 10px; color: #94a3b8; background: #0f172a; padding: 6px 8px; border-radius: 4px; border: 1px solid #1e293b; align-items: center; justify-content: space-between;">
+            <span>Please open Google Messages Web</span>
+            <button id="btnOpenMessages" class="btn btn-primary" style="padding: 3px 8px; font-size: 10px;">Open Tab</button>
+        </div>
+    </div>
+
+    <!-- Step 1: Contacts Importer -->
+    <div class="card">
+        <div class="card-title">
+            <span>1. Contact List</span>
+            <div style="display: flex; gap: 4px;">
+                <button id="btnTabUpload" class="btn btn-primary" style="padding: 2px 6px; font-size: 9px;">Upload</button>
+                <button id="btnTabManual" class="btn btn-secondary" style="padding: 2px 6px; font-size: 9px;">Paste</button>
+            </div>
+        </div>
+
+        <!-- Upload View -->
+        <div id="viewUpload">
+            <div id="dropzone" class="dropzone">
+                <input type="file" id="fileInput" accept=".csv,.txt" style="display: none;">
+                <p style="font-weight: 600; color: #e2e8f0;">Click or Drop CSV File</p>
+                <p style="font-size: 10px; color: #64748b; margin-top: 2px;">Format: phone, name, custom_fields...</p>
+            </div>
+        </div>
+
+        <!-- Manual Paste View -->
+        <div id="viewManual" style="display: none;">
+            <textarea id="manualInput" rows="3" placeholder="+12345678901, John Doe&#10;+19876543210, Alice Smith"></textarea>
+            <button id="btnLoadManual" class="btn btn-secondary" style="width: 100%; margin-top: 6px;">Load Pasted Numbers</button>
+        </div>
+
+        <!-- Dynamic Tags -->
+        <div id="tagPillsContainer" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+            <span style="font-size: 10px; color: #64748b;">Tags:</span>
+            <button class="tag-pill" data-tag="{name}">{name}</button>
+            <button class="tag-pill" data-tag="{phone}">{phone}</button>
+        </div>
+    </div>
+
+    <!-- Step 2: Message Template -->
+    <div class="card">
+        <div class="card-title">
+            <span>2. Message Template</span>
+            <span id="charCount" style="font-size: 10px; font-family: monospace; color: #64748b;">0 chars</span>
+        </div>
+        <textarea id="messageTemplate" rows="3" placeholder="Hello {name}, your appointment is confirmed!"></textarea>
+        
+        <!-- Live Preview -->
+        <div style="background: #0d1322; padding: 6px 8px; border-radius: 4px; border: 1px solid #1e293b;">
+            <span style="font-size: 9px; font-weight: 700; color: #60a5fa; text-transform: uppercase;">Preview:</span>
+            <p id="previewText" style="font-size: 10px; color: #cbd5e1; margin-top: 2px; font-style: italic;">Hello John Doe, your appointment is confirmed!</p>
+        </div>
+    </div>
+
+    <!-- Step 3: Anti-Spam & Random Delay Settings -->
+    <div class="card">
+        <div class="card-title">
+            <span>3. Anti-Spam Random Delay</span>
+            <span style="font-size: 10px; color: #10b981;">🛡 Human-like timing</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div>
+                <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 3px;">Min Delay (sec)</label>
+                <input type="number" id="minDelay" value="15" min="2" max="300">
+            </div>
+            <div>
+                <label style="font-size: 10px; color: #94a3b8; display: block; margin-bottom: 3px;">Max Delay (sec)</label>
+                <input type="number" id="maxDelay" value="45" min="2" max="300">
+            </div>
+        </div>
+        <div style="display: flex; gap: 4px; align-items: center;">
+            <span style="font-size: 9px; color: #64748b;">Presets:</span>
+            <button class="btn btn-secondary" style="padding: 2px 5px; font-size: 9px;" onclick="setDelayPreset(20, 60)">Safe (20-60s)</button>
+            <button class="btn btn-secondary" style="padding: 2px 5px; font-size: 9px;" onclick="setDelayPreset(10, 30)">Moderate (10-30s)</button>
+            <button class="btn btn-secondary" style="padding: 2px 5px; font-size: 9px;" onclick="setDelayPreset(5, 15)">Fast (5-15s)</button>
+        </div>
+    </div>
+
+    <!-- KPI Stats -->
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-label">Total</div>
+            <div id="statTotal" class="stat-value">0</div>
+        </div>
+        <div class="stat-box" style="border-color: rgba(16, 185, 129, 0.4);">
+            <div class="stat-label" style="color: #34d399;">Sent</div>
+            <div id="statSent" class="stat-value" style="color: #34d399;">0</div>
+        </div>
+        <div class="stat-box" style="border-color: rgba(239, 68, 68, 0.4);">
+            <div class="stat-label" style="color: #f87171;">Failed</div>
+            <div id="statFailed" class="stat-value" style="color: #f87171;">0</div>
+        </div>
+        <div class="stat-box" style="border-color: rgba(245, 158, 11, 0.4);">
+            <div class="stat-label" style="color: #fbbf24;">Pending</div>
+            <div id="statPending" class="stat-value" style="color: #fbbf24;">0</div>
+        </div>
+    </div>
+
+    <!-- Progress & Countdown Banner -->
+    <div class="card" style="gap: 6px;">
+        <div style="display: flex; justify-content: space-between; font-size: 10px;">
+            <span id="campaignStatusLabel" style="color: #94a3b8; font-weight: 600;">Ready to send</span>
+            <span id="progressPercent" style="font-family: monospace; font-weight: 700; color: #60a5fa;">0.0%</span>
+        </div>
+        <div class="progress-container">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div id="countdownBanner" style="display: none; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); padding: 5px 8px; border-radius: 4px; font-size: 10px; color: #93c5fd; justify-content: space-between; align-items: center;">
+            <span>⏳ Anti-Spam Pause in progress...</span>
+            <span id="countdownTimer" style="font-weight: 800; font-family: monospace; background: #1e3a8a; color: #fff; padding: 1px 6px; border-radius: 3px;">0s</span>
+        </div>
+    </div>
+
+    <!-- Campaign Action Controls -->
+    <div style="display: flex; gap: 6px;">
+        <button id="btnStart" class="btn btn-success" style="flex: 1; padding: 8px;">
+            <span>▶ Start Campaign</span>
+        </button>
+        <button id="btnPause" class="btn btn-warning" style="display: none; flex: 1; padding: 8px;">
+            <span>⏸ Pause</span>
+        </button>
+        <button id="btnResume" class="btn btn-success" style="display: none; flex: 1; padding: 8px;">
+            <span>▶ Resume</span>
+        </button>
+        <button id="btnStop" class="btn btn-danger" style="display: none; padding: 8px 12px;">
+            <span>⏹ Stop</span>
+        </button>
+        <button id="btnReset" class="btn btn-secondary" style="padding: 8px 10px;" title="Reset Status">
+            <span>↺</span>
+        </button>
+        <button id="btnExport" class="btn btn-secondary" style="padding: 8px 10px;" title="Export CSV">
+            <span>📥</span>
+        </button>
+    </div>
+
+    <!-- Contacts Queue Table -->
+    <div class="card" style="padding: 8px; max-height: 180px; overflow-y: auto;">
+        <div class="card-title" style="margin-bottom: 4px;">
+            <span>Queue</span>
+            <span id="queueCount" style="font-size: 9px; color: #64748b;">0 contacts</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Recipient</th>
+                    <th>Phone</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="queueTbody">
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #64748b; padding: 12px 0;">No contacts loaded yet.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="card" style="padding: 8px;">
+        <div class="card-title" style="margin-bottom: 4px;">
+            <span>Live Activity Log</span>
+            <button id="btnClearLog" style="background: none; border: none; color: #64748b; font-size: 9px; cursor: pointer;">Clear</button>
+        </div>
+        <div id="terminal" class="terminal">
+            <div style="color: #64748b;">// Ready. Open Google Messages Web and import contacts to start.</div>
+        </div>
+    </div>
+
+    <script src="sidepanel.js"></script>
+</body>
+</html>
