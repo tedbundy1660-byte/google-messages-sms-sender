@@ -26,6 +26,10 @@ function simulateClick(el) {
         el.scrollIntoView?.({ block: 'center', inline: 'center' });
         el.focus?.();
         
+        // Remove disabled flags if any
+        if (el.hasAttribute('disabled')) el.removeAttribute('disabled');
+        if (el.getAttribute('aria-disabled') === 'true') el.setAttribute('aria-disabled', 'false');
+
         const rect = el.getBoundingClientRect();
         const x = rect.left + rect.width / 2;
         const y = rect.top + rect.height / 2;
@@ -47,6 +51,13 @@ function simulateClick(el) {
         el.dispatchEvent(new MouseEvent('mouseup', opts));
         el.dispatchEvent(new MouseEvent('click', opts));
         el.click?.();
+        
+        // Also trigger element at exact center point
+        const pointEl = document.elementFromPoint(x, y);
+        if (pointEl && pointEl !== el) {
+            pointEl.dispatchEvent(new MouseEvent('click', opts));
+            pointEl.click?.();
+        }
     } catch (e) {
         try { el.click?.(); } catch (err) {}
     }
@@ -188,26 +199,27 @@ async function typeMessageIntoComposer(composer, message) {
         document.execCommand('delete', false, null);
         document.execCommand('insertText', false, message);
         composer.innerText = message;
+        composer.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: message }));
         composer.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: message }));
         composer.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
         composer.focus();
-        composer.value = '';
+        composer.select?.();
         
-        // Use native execCommand first
-        document.execCommand('insertText', false, message);
-        
-        if (composer.value !== message) {
-            try {
-                const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-                if (setter) setter.call(composer, message);
-                else composer.value = message;
-            } catch (e) {
-                composer.value = message;
-            }
+        // Native prototype setter
+        try {
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+            if (setter) setter.call(composer, message);
+            else composer.value = message;
+        } catch (e) {
+            composer.value = message;
         }
+        
+        // Insert via execCommand
+        document.execCommand('insertText', false, message);
 
         // Fire full event chain for Angular Reactive Forms
+        composer.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: message }));
         composer.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: message }));
         composer.dispatchEvent(new Event('input', { bubbles: true }));
         composer.dispatchEvent(new Event('change', { bubbles: true }));
@@ -215,12 +227,12 @@ async function typeMessageIntoComposer(composer, message) {
         composer.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', bubbles: true }));
     }
 
-    await sleep(600);
+    await sleep(500);
 }
 
-// Check if a button is strictly the Send button (and not emoji/attachments)
+// Check if a button is strictly the Send button
 function isSendButton(btn) {
-    if (!btn || btn.disabled) return false;
+    if (!btn) return false;
     const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
     const title = (btn.getAttribute('title') || '').toLowerCase();
     const combined = `${aria} ${title}`;
@@ -231,7 +243,7 @@ function isSendButton(btn) {
         if (combined.includes(b)) return false;
     }
 
-    // STRICT WHITELIST: Only match Send button components
+    // STRICT WHITELIST: Match Send button components
     if (btn.closest('mws-message-send-button') || btn.tagName.toLowerCase() === 'mws-message-send-button') {
         return true;
     }
@@ -247,7 +259,6 @@ function isSendButton(btn) {
 
 // Locate the specific Send Button
 function findSendButton() {
-    // 1. Direct tag/attribute queries
     const primarySelectors = [
         'mws-message-send-button button',
         'button[data-e2e-send-text-button]',
@@ -262,18 +273,17 @@ function findSendButton() {
     for (const sel of primarySelectors) {
         try {
             const btn = document.querySelector(sel);
-            if (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0) && isSendButton(btn)) {
+            if (btn && isSendButton(btn)) {
                 return btn;
             }
         } catch (e) {}
     }
 
-    // 2. Search compose area for valid send button
     const composeArea = document.querySelector('mws-message-compose, div.input-container');
     if (composeArea) {
-        const buttons = composeArea.querySelectorAll('button');
+        const buttons = composeArea.querySelectorAll('button, div[role="button"]');
         for (const b of buttons) {
-            if (isSendButton(b) && (b.offsetWidth > 0 || b.offsetHeight > 0)) {
+            if (isSendButton(b)) {
                 return b;
             }
         }
@@ -286,7 +296,7 @@ function findSendButton() {
 async function triggerSend(composer) {
     let sendBtn = null;
 
-    // Poll for up to 2 seconds for Angular to enable the send button
+    // Wait up to 2 seconds for Angular to enable the send button
     const start = Date.now();
     while (Date.now() - start < 2000) {
         sendBtn = findSendButton();
@@ -295,9 +305,15 @@ async function triggerSend(composer) {
     }
 
     if (sendBtn) {
+        // Unlock button if Angular marked it disabled
+        if (sendBtn.hasAttribute('disabled')) sendBtn.removeAttribute('disabled');
         simulateClick(sendBtn);
-        const icon = sendBtn.querySelector('mat-icon, svg, span');
-        if (icon) simulateClick(icon);
+        
+        // Also click inside child elements (e.g. icon/span)
+        const innerIcons = sendBtn.querySelectorAll('mat-icon, svg, span, div');
+        for (const icon of innerIcons) {
+            simulateClick(icon);
+        }
     }
 
     // Dispatch keyboard Enter in composer (Google Messages native shortcut)
