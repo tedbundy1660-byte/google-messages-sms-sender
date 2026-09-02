@@ -94,7 +94,7 @@ function checkPageStatus() {
         return { isReady: false, reason: 'Google Messages requires QR code pairing' };
     }
 
-    const startChatBtn = document.querySelector('a[data-e2e-start-chat], a[href*="start-chat"], button:has-text("Start chat"), mws-fab a');
+    const startChatBtn = document.querySelector('a[data-e2e-start-chat], a[href*="start-chat"], mws-fab a, button[aria-label*="Start chat" i]');
     const convList = document.querySelector('mws-conversations-list, div[role="list"]');
 
     if (startChatBtn || convList || window.location.href.includes('conversations')) {
@@ -126,18 +126,18 @@ function findComposer() {
     ];
 
     for (const sel of composerSelectors) {
-        const els = document.querySelectorAll(sel);
-        for (const el of els) {
-            // Make sure composer is in the bottom pane and visible
-            if (el && (el.offsetWidth > 0 || el.offsetHeight > 0)) {
-                // Ensure it's not the recipient search input
-                const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
-                const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
-                if (!placeholder.includes('phone') && !placeholder.includes('name') && !ariaLabel.includes('recipient')) {
-                    return el;
+        try {
+            const els = document.querySelectorAll(sel);
+            for (const el of els) {
+                if (el && (el.offsetWidth > 0 || el.offsetHeight > 0)) {
+                    const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+                    const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+                    if (!placeholder.includes('phone') && !placeholder.includes('name') && !ariaLabel.includes('recipient')) {
+                        return el;
+                    }
                 }
             }
-        }
+        } catch (e) {}
     }
     return null;
 }
@@ -145,21 +145,25 @@ function findComposer() {
 // Helper to click the 'Send to [number]' dropdown suggestion
 function clickSendToSuggestion(phone) {
     // 1. Direct query of Google Messages custom list item
-    const customItem = document.querySelector('mws-contact-list-item, [role="option"], mat-list-item');
-    if (customItem && (customItem.innerText || '').includes('Send to')) {
-        simulateClick(customItem);
-        return true;
-    }
-
-    // 2. Query leaf elements with text "Send to"
-    const all = document.querySelectorAll('*');
-    for (const el of all) {
-        if (el.innerText && el.innerText.includes('Send to') && el.children.length === 0) {
-            const target = el.closest('mws-contact-list-item, [role="option"], mat-list-item, div.contact, button') || el.parentElement || el;
-            simulateClick(target);
+    try {
+        const customItem = document.querySelector('mws-contact-list-item, [role="option"], mat-list-item');
+        if (customItem && (customItem.innerText || '').includes('Send to')) {
+            simulateClick(customItem);
             return true;
         }
-    }
+    } catch (e) {}
+
+    // 2. Query leaf elements with text "Send to"
+    try {
+        const all = document.querySelectorAll('*');
+        for (const el of all) {
+            if (el.innerText && el.innerText.includes('Send to') && el.children.length === 0) {
+                const target = el.closest('mws-contact-list-item, [role="option"], mat-list-item, div.contact, button') || el.parentElement || el;
+                simulateClick(target);
+                return true;
+            }
+        }
+    } catch (e) {}
     return false;
 }
 
@@ -212,8 +216,7 @@ async function sendSms(phone, message) {
                         'mws-fab a',
                         'mws-fab button',
                         'button[aria-label*="Start chat" i]',
-                        'a[aria-label*="Start chat" i]',
-                        'button:has-text("Start chat")'
+                        'a[aria-label*="Start chat" i]'
                     ];
 
                     const startChatBtn = await waitForElement(startChatSelectors, 2500);
@@ -312,16 +315,32 @@ async function sendSms(phone, message) {
             'button[aria-label*="Send" i]',
             'mws-message-send-button button',
             'mws-message-send-button',
-            'div[data-e2e-send-text-button]',
-            'button:has(mat-icon:has-text("send"))'
+            'div[data-e2e-send-text-button]'
         ];
 
         let sendBtn = null;
         for (const sel of sendButtonSelectors) {
-            const btn = document.querySelector(sel);
-            if (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0) && !btn.disabled) {
-                sendBtn = btn;
-                break;
+            try {
+                const btn = document.querySelector(sel);
+                if (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0) && !btn.disabled) {
+                    sendBtn = btn;
+                    break;
+                }
+            } catch (e) {}
+        }
+
+        // Fallback: search buttons for send icon/text
+        if (!sendBtn) {
+            const allButtons = document.querySelectorAll('button');
+            for (const b of allButtons) {
+                const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                const inner = (b.innerText || '').toLowerCase();
+                if (aria.includes('send') || inner.includes('send')) {
+                    if (b.offsetWidth > 0 && b.offsetHeight > 0 && !b.disabled) {
+                        sendBtn = b;
+                        break;
+                    }
+                }
             }
         }
 
