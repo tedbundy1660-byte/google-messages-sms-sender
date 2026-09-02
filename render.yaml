@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: google-messages-sms-automator
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    disk:
+      name: user_data
+      mountPath: /app/user_data
+      sizeGB: 1

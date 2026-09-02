@@ -131,6 +131,21 @@ async def pair_device(headless: bool = False):
     return {"success": True, "is_paired": is_paired, "status_text": status_text}
 
 
+@app.get("/api/pairing/qr")
+async def get_pairing_qr():
+    """Retrieve the current QR code screenshot as base64 for in-browser scanning."""
+    is_paired, status_text = await engine.check_pairing_status()
+    if is_paired:
+        return {"is_paired": True, "qr_image": None, "status_text": status_text}
+    
+    qr_base64 = await engine.get_qr_screenshot_base64()
+    return {
+        "is_paired": False,
+        "qr_image": qr_base64,
+        "status_text": status_text
+    }
+
+
 @app.post("/api/browser/close")
 async def close_browser():
     await engine.close()

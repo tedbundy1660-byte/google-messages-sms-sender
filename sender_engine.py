@@ -1,5 +1,6 @@
 import asyncio
 import os
+import base64
 import logging
 from typing import Optional, Tuple, Callable, Any
 from pathlib import Path
@@ -144,6 +145,35 @@ class GoogleMessagesEngine:
             return False, "Loading Google Messages / Pending Pairing"
         except Exception as e:
             return False, f"Error checking pairing: {str(e)}"
+
+    async def get_qr_screenshot_base64(self) -> Optional[str]:
+        """Capture screenshot of the QR code element if visible for remote web pairing."""
+        if not self.page or self.page.is_closed():
+            return None
+        
+        qr_selectors = [
+            'mw-qr-code',
+            'qr-code',
+            'div.qr-code-container',
+            'img[alt*="QR" i]',
+            'canvas',
+            'div.landing-screen',
+        ]
+        
+        for sel in qr_selectors:
+            try:
+                el = self.page.locator(sel).first
+                if await el.is_visible(timeout=600):
+                    img_bytes = await el.screenshot()
+                    return base64.b64encode(img_bytes).decode("utf-8")
+            except Exception:
+                continue
+        
+        try:
+            img_bytes = await self.page.screenshot()
+            return base64.b64encode(img_bytes).decode("utf-8")
+        except Exception:
+            return None
 
     async def wait_until_paired(self, timeout_seconds: int = 180) -> bool:
         """Wait until the user completes the QR code pairing scan."""

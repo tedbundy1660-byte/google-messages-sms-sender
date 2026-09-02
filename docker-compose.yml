@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  google-messages-sms-automator:
+    build: .
+    container_name: google-messages-sms-automator
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./user_data:/app/user_data
+    environment:
+      - PORT=8000
+    restart: unless-stopped
