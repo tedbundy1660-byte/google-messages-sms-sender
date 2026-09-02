@@ -314,127 +314,107 @@ class GoogleMessagesEngine:
                     await self.log("info", f"Typed recipient number {phone_number} into search field.")
                     await asyncio.sleep(1.5)
 
-                    # 4. Select the contact from suggestions with adaptive coordinate & event loop
+                    # 4. Select the contact from suggestions
                     await self.log("info", "Selecting contact from dropdown suggestions...")
-                    await asyncio.sleep(1.0)
+                    await asyncio.sleep(0.8)
 
-                    # Multi-attempt selection loop: keeps clicking until conversation/composer opens
-                    for attempt in range(1, 7):
-                        # Check if composer already appeared
-                        composer = await self._find_message_composer()
-                        if composer:
-                            await self.log("info", f"Conversation opened successfully on attempt {attempt}!")
-                            break
+                    selected = False
+                    for attempt in range(1, 6):
+                        await self.log("info", f"Confirming recipient selection for {phone_number} (attempt {attempt}/5)...")
 
-                        await self.log("info", f"Clicking 'Send to {phone_number}' suggestion (attempt {attempt}/6)...")
-
-                        # Step A: Get exact screen coordinates of 'Send to' row, avatar, and text
-                        coords = await self.page.evaluate("""() => {
-                            // Find element containing 'Send to'
-                            const all = Array.from(document.querySelectorAll('*'));
-                            for (const el of all) {
-                                if (el.innerText && el.innerText.includes('Send to') && el.children.length === 0) {
-                                    const rect = el.getBoundingClientRect();
-                                    if (rect.width > 0 && rect.height > 0) {
-                                        return {
-                                            found: true,
-                                            x: rect.left + rect.width / 2,
-                                            y: rect.top + rect.height / 2,
-                                            left: rect.left,
-                                            top: rect.top,
-                                            height: rect.height
-                                        };
-                                    }
-                                }
-                            }
-                            // Fallback to contact list item
-                            const item = document.querySelector('mws-contact-list-item, [role="option"], mat-list-item, div.contact');
-                            if (item) {
-                                const rect = item.getBoundingClientRect();
-                                return {
-                                    found: true,
-                                    x: rect.left + rect.width / 2,
-                                    y: rect.top + rect.height / 2,
-                                    left: rect.left,
-                                    top: rect.top,
-                                    height: rect.height
-                                };
-                            }
-                            return { found: false };
-                        }""")
-
-                        if coords and coords.get("found"):
-                            left = coords["left"]
-                            top = coords["top"]
-                            mid_y = top + coords.get("height", 30) / 2
-                            # Click the avatar circle (left of text)
-                            try:
-                                await self.page.mouse.click(max(10, left - 25), mid_y)
-                                await asyncio.sleep(0.3)
-                                # Click the text itself
-                                await self.page.mouse.click(coords["x"], coords["y"])
-                                await asyncio.sleep(0.5)
-                            except Exception:
-                                pass
-
-                            # Check if composer appeared immediately
-                            composer = await self._find_message_composer()
-                            if composer:
-                                await self.log("info", "Conversation opened from coordinate click!")
-                                break
-
-                        # Step B: JS synthetic full-event sequence on all candidate elements
-                        await self.page.evaluate("""() => {
-                            const items = Array.from(document.querySelectorAll('mws-contact-list-item, [role="option"], mat-list-item, div, button, span, a'));
-                            for (const el of items) {
-                                const txt = (el.innerText || '').trim();
-                                if (txt.includes('Send to') && el.offsetHeight > 10 && el.offsetHeight < 150) {
-                                    el.focus?.();
-                                    el.click?.();
-                                    const opts = { bubbles: true, cancelable: true, view: window };
-                                    el.dispatchEvent(new PointerEvent('pointerdown', opts));
-                                    el.dispatchEvent(new MouseEvent('mousedown', opts));
-                                    el.dispatchEvent(new PointerEvent('pointerup', opts));
-                                    el.dispatchEvent(new MouseEvent('mouseup', opts));
-                                    el.dispatchEvent(new MouseEvent('click', opts));
-                                }
-                            }
-                        }""")
-                        await asyncio.sleep(0.5)
-
-                        # Check if composer appeared
-                        composer = await self._find_message_composer()
-                        if composer:
-                            await self.log("info", "Conversation opened from synthetic event dispatch!")
-                            break
-
-                        # Step C: Keyboard navigation (safe try-catch with low timeout)
+                        # Step A: Keyboard selection in recipient search input (ArrowDown + Enter)
                         try:
                             if await recipient_input.is_visible(timeout=500):
                                 await recipient_input.focus(timeout=500)
                                 await self.page.keyboard.press("ArrowDown")
                                 await asyncio.sleep(0.15)
                                 await self.page.keyboard.press("Enter")
-                                await asyncio.sleep(0.15)
+                                await asyncio.sleep(0.2)
                                 await self.page.keyboard.press("Enter")
+                                await asyncio.sleep(0.5)
                         except Exception:
                             pass
 
-                        # Step D: Playwright locators click
-                        for sel in ['mws-contact-list-item', '[role="option"]', 'div[data-e2e-contact-item]', 'mat-list-item']:
+                        # Step B: Direct click on picker list item inside contact picker container
+                        for sel in [
+                            'mws-contact-picker mws-contact-list-item',
+                            'mws-contact-picker [role="option"]',
+                            'mws-contact-picker mat-list-item',
+                            'mws-contact-list-item',
+                            'div.contact[role="option"]',
+                            'mat-list-item'
+                        ]:
                             try:
                                 loc = self.page.locator(sel).first
-                                if await loc.is_visible(timeout=300):
-                                    await loc.click(force=True, timeout=500)
+                                if await loc.is_visible(timeout=400):
+                                    await loc.click(force=True, timeout=800)
+                                    selected = True
                                     break
                             except Exception:
                                 pass
 
-                        await asyncio.sleep(0.8)
+                        # Step C: Coordinate click strictly on the suggestion item (NEVER clicking left sidebar)
+                        if not selected:
+                            coords = await self.page.evaluate("""() => {
+                                const picker = document.querySelector('mws-contact-picker, div.contact-picker');
+                                if (picker) {
+                                    const item = picker.querySelector('mws-contact-list-item, [role="option"], mat-list-item, div.contact') || picker;
+                                    const rect = item.getBoundingClientRect();
+                                    if (rect.width > 0 && rect.height > 0) {
+                                        return { found: true, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                                    }
+                                }
+                                const all = Array.from(document.querySelectorAll('*'));
+                                for (const el of all) {
+                                    if (el.innerText && el.innerText.includes('Send to') && el.children.length === 0) {
+                                        const rect = el.getBoundingClientRect();
+                                        if (rect.width > 0 && rect.height > 0) {
+                                            return { found: true, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+                                        }
+                                    }
+                                }
+                                return { found: false };
+                            }""")
+
+                            if coords and coords.get("found"):
+                                try:
+                                    await self.page.mouse.click(coords["x"], coords["y"])
+                                except Exception:
+                                    pass
+
+                        await asyncio.sleep(1.0)
                         await self._dismiss_popups()
 
+                        # Check if message composer appeared for the new chat
+                        composer = await self._find_message_composer(timeout=2.0)
+                        if composer:
+                            await self.log("info", f"Conversation opened for {phone_number}!")
+                            break
+
                 # 5. Final check for Message Composer
-                composer = await self._find_message_composer()
+                composer = await self._find_message_composer(timeout=6.0)
+
+                if not composer:
+                    # Capture debug screenshot
+                    try:
+                        os.makedirs(BASE_DIR / "debug", exist_ok=True)
+                        screenshot_path = str(BASE_DIR / "debug" / "composer_error.png")
+                        await self.page.screenshot(path=screenshot_path)
+                        await self.log("warning", f"Saved debug screenshot to debug/composer_error.png")
+                    except Exception:
+                        pass
+                    return False, "Could not locate message composer input. Ensure device is paired and number is valid."
+
+                # Verify that the active conversation belongs to the intended recipient
+                try:
+                    header = self.page.locator('mws-conversation-header, div[role="region"] header').first
+                    if await header.is_visible(timeout=1000):
+                        header_text = await header.inner_text()
+                        header_digits = "".join([c for c in header_text if c.isdigit()])
+                        if last_7 and header_digits and last_7 not in header_digits:
+                            await self.log("warning", f"Conversation mismatch: on '{header_text.splitlines()[0]}' instead of {phone_number}.")
+                except Exception:
+                    pass
 
                 if not composer:
                     # Capture debug screenshot
@@ -558,7 +538,7 @@ class GoogleMessagesEngine:
             except Exception:
                 pass
 
-    async def _find_message_composer(self):
+    async def _find_message_composer(self, timeout: float = 6.0):
         """Search for the message composer textarea or contenteditable element with multiple fallback selectors."""
         composer_selectors = [
             'mws-autosize-textarea textarea',
@@ -582,9 +562,9 @@ class GoogleMessagesEngine:
             'textarea',
         ]
 
-        # Poll for composer for up to 10 seconds
+        # Poll for composer for up to timeout seconds
         start_time = asyncio.get_event_loop().time()
-        while (asyncio.get_event_loop().time() - start_time) < 10.0:
+        while (asyncio.get_event_loop().time() - start_time) < timeout:
             # Check by placeholder and label
             for label in ["Text message", "SMS message", "Chat message", "RCS message", "Message", "SMS", "Text"]:
                 try:
