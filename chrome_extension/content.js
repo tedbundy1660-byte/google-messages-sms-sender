@@ -19,7 +19,7 @@ function dismissPopups() {
     }
 }
 
-// Full mouse/pointer/touch event dispatcher with coordinate hits
+// Full mouse/pointer/touch event dispatcher with coordinate precision
 function simulateClick(el) {
     if (!el) return;
     try {
@@ -47,13 +47,6 @@ function simulateClick(el) {
         el.dispatchEvent(new MouseEvent('mouseup', opts));
         el.dispatchEvent(new MouseEvent('click', opts));
         el.click?.();
-        
-        // Also trigger element at coordinates
-        const pointEl = document.elementFromPoint(x, y);
-        if (pointEl && pointEl !== el) {
-            pointEl.dispatchEvent(new MouseEvent('click', opts));
-            pointEl.click?.();
-        }
     } catch (e) {
         try { el.click?.(); } catch (err) {}
     }
@@ -198,14 +191,12 @@ async function typeMessageIntoComposer(composer, message) {
         composer.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: message }));
         composer.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
-        // Textarea handling
         composer.focus();
         composer.value = '';
         
-        // Execute insertText while focused
+        // Use native execCommand first
         document.execCommand('insertText', false, message);
         
-        // Ensure value is set
         if (composer.value !== message) {
             try {
                 const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
@@ -227,71 +218,91 @@ async function typeMessageIntoComposer(composer, message) {
     await sleep(600);
 }
 
-// Multi-method Send Trigger (Buttons, Child Icons, Coordinate Clicks, and Enter Key)
-async function triggerSend(composer) {
-    // 1. Collect all send button candidates
-    const sendButtonSelectors = [
-        'button[data-e2e-send-text-button]',
+// Check if a button is strictly the Send button (and not emoji/attachments)
+function isSendButton(btn) {
+    if (!btn || btn.disabled) return false;
+    const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+    const title = (btn.getAttribute('title') || '').toLowerCase();
+    const combined = `${aria} ${title}`;
+
+    // STRICT BLACKLIST: Never click emojis, attachments, GIFs, stickers, microphones, etc.
+    const blacklist = ['emoji', 'attach', 'gallery', 'gif', 'sticker', 'schedule', 'plus', 'audio', 'voice', 'mic', 'more', 'device', 'info', 'call', 'video'];
+    for (const b of blacklist) {
+        if (combined.includes(b)) return false;
+    }
+
+    // STRICT WHITELIST: Only match Send button components
+    if (btn.closest('mws-message-send-button') || btn.tagName.toLowerCase() === 'mws-message-send-button') {
+        return true;
+    }
+    if (btn.hasAttribute('data-e2e-send-text-button') || btn.classList.contains('send-button')) {
+        return true;
+    }
+    if (aria.includes('send sms') || aria.includes('send rcs') || aria.includes('send message') || aria === 'send') {
+        return true;
+    }
+
+    return false;
+}
+
+// Locate the specific Send Button
+function findSendButton() {
+    // 1. Direct tag/attribute queries
+    const primarySelectors = [
         'mws-message-send-button button',
+        'button[data-e2e-send-text-button]',
         'mws-message-send-button',
-        'button[aria-label*="Send" i]',
-        'button[aria-label*="SMS" i]',
-        'button[aria-label*="RCS" i]',
-        'button.send-button',
-        'div[data-e2e-send-text-button]',
-        'button[data-qa*="send" i]'
+        'button[aria-label*="Send SMS" i]',
+        'button[aria-label*="Send RCS" i]',
+        'button[aria-label*="Send message" i]',
+        'button[aria-label="Send" i]',
+        'button.send-button'
     ];
 
-    const candidates = [];
-
-    // Specific selectors
-    for (const sel of sendButtonSelectors) {
+    for (const sel of primarySelectors) {
         try {
-            const els = document.querySelectorAll(sel);
-            for (const el of els) {
-                if (el && (el.offsetWidth > 0 || el.offsetHeight > 0)) {
-                    candidates.push(el);
-                }
+            const btn = document.querySelector(sel);
+            if (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0) && isSendButton(btn)) {
+                return btn;
             }
         } catch (e) {}
     }
 
-    // Buttons inside compose container
-    const composeContainer = document.querySelector('mws-message-compose, div.compose-container, mws-autosize-textarea');
-    if (composeContainer) {
-        const area = composeContainer.closest('div.input-container') || composeContainer.parentElement || composeContainer;
-        const buttons = area.querySelectorAll('button, div[role="button"]');
+    // 2. Search compose area for valid send button
+    const composeArea = document.querySelector('mws-message-compose, div.input-container');
+    if (composeArea) {
+        const buttons = composeArea.querySelectorAll('button');
         for (const b of buttons) {
-            const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-            const txt = (b.innerText || '').toLowerCase();
-            if (aria.includes('send') || txt.includes('send') || b.querySelector('mat-icon, svg')) {
-                if (!candidates.includes(b)) candidates.push(b);
+            if (isSendButton(b) && (b.offsetWidth > 0 || b.offsetHeight > 0)) {
+                return b;
             }
         }
     }
 
-    // Global search for send buttons
-    const allButtons = document.querySelectorAll('button');
-    for (const b of allButtons) {
-        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-        if (aria.includes('send') && (b.offsetWidth > 0 || b.offsetHeight > 0)) {
-            if (!candidates.includes(b)) candidates.push(b);
-        }
+    return null;
+}
+
+// Trigger Send ONLY on the real Send Button or Enter Key
+async function triggerSend(composer) {
+    let sendBtn = null;
+
+    // Poll for up to 2 seconds for Angular to enable the send button
+    const start = Date.now();
+    while (Date.now() - start < 2000) {
+        sendBtn = findSendButton();
+        if (sendBtn) break;
+        await sleep(200);
     }
 
-    // 2. Click all send button candidates and their inner icons
-    for (const btn of candidates) {
-        simulateClick(btn);
-        const children = btn.querySelectorAll('mat-icon, svg, span, div');
-        for (const child of children) {
-            simulateClick(child);
-        }
+    if (sendBtn) {
+        simulateClick(sendBtn);
+        const icon = sendBtn.querySelector('mat-icon, svg, span');
+        if (icon) simulateClick(icon);
     }
 
-    // 3. Dispatch keyboard Enter in composer (Standard Google Messages shortcut)
+    // Dispatch keyboard Enter in composer (Google Messages native shortcut)
+    await sleep(200);
     composer.focus();
-    await sleep(150);
-
     const enterOpts = {
         key: 'Enter',
         code: 'Enter',
@@ -435,15 +446,14 @@ async function sendSms(phone, message) {
         // 1. Enter message into composer
         await typeMessageIntoComposer(composer, message);
 
-        // 2. Trigger Send via multiple channels
+        // 2. Trigger Send strictly on Send Button
         await triggerSend(composer);
 
         await sleep(2500);
 
-        // 3. Verify if message was cleared from composer (proof of sending) or error notice appears
+        // 3. Verify if message was cleared from composer
         const composerTextAfter = (composer.value || composer.innerText || '').trim();
         if (composerTextAfter.length > 0 && composerTextAfter === message.trim()) {
-            // Re-attempt Send trigger once more in case of animation delay
             await triggerSend(composer);
             await sleep(1500);
         }
