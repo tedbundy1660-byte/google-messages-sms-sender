@@ -368,11 +368,20 @@ class GoogleMessagesEngine:
                             top = coords["top"]
                             mid_y = top + coords.get("height", 30) / 2
                             # Click the avatar circle (left of text)
-                            await self.page.mouse.click(max(10, left - 25), mid_y)
-                            await asyncio.sleep(0.2)
-                            # Click the text itself
-                            await self.page.mouse.click(coords["x"], coords["y"])
-                            await asyncio.sleep(0.2)
+                            try:
+                                await self.page.mouse.click(max(10, left - 25), mid_y)
+                                await asyncio.sleep(0.3)
+                                # Click the text itself
+                                await self.page.mouse.click(coords["x"], coords["y"])
+                                await asyncio.sleep(0.5)
+                            except Exception:
+                                pass
+
+                            # Check if composer appeared immediately
+                            composer = await self._find_message_composer()
+                            if composer:
+                                await self.log("info", "Conversation opened from coordinate click!")
+                                break
 
                         # Step B: JS synthetic full-event sequence on all candidate elements
                         await self.page.evaluate("""() => {
@@ -391,26 +400,37 @@ class GoogleMessagesEngine:
                                 }
                             }
                         }""")
+                        await asyncio.sleep(0.5)
 
-                        # Step C: Keyboard navigation (ArrowDown + Enter, and double Enter)
-                        await recipient_input.focus()
-                        await self.page.keyboard.press("ArrowDown")
-                        await asyncio.sleep(0.15)
-                        await self.page.keyboard.press("Enter")
-                        await asyncio.sleep(0.2)
-                        await self.page.keyboard.press("Enter")
+                        # Check if composer appeared
+                        composer = await self._find_message_composer()
+                        if composer:
+                            await self.log("info", "Conversation opened from synthetic event dispatch!")
+                            break
+
+                        # Step C: Keyboard navigation (safe try-catch with low timeout)
+                        try:
+                            if await recipient_input.is_visible(timeout=500):
+                                await recipient_input.focus(timeout=500)
+                                await self.page.keyboard.press("ArrowDown")
+                                await asyncio.sleep(0.15)
+                                await self.page.keyboard.press("Enter")
+                                await asyncio.sleep(0.15)
+                                await self.page.keyboard.press("Enter")
+                        except Exception:
+                            pass
 
                         # Step D: Playwright locators click
                         for sel in ['mws-contact-list-item', '[role="option"]', 'div[data-e2e-contact-item]', 'mat-list-item']:
                             try:
                                 loc = self.page.locator(sel).first
                                 if await loc.is_visible(timeout=300):
-                                    await loc.click(force=True)
+                                    await loc.click(force=True, timeout=500)
                                     break
                             except Exception:
                                 pass
 
-                        await asyncio.sleep(1.0)
+                        await asyncio.sleep(0.8)
                         await self._dismiss_popups()
 
                 # 5. Final check for Message Composer
