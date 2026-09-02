@@ -47,6 +47,12 @@ function simulateClick(el) {
         el.dispatchEvent(new MouseEvent('mouseup', opts));
         el.dispatchEvent(new MouseEvent('click', opts));
         el.click?.();
+        
+        // Also trigger element at coordinates if it's an overlay/icon
+        const pointEl = document.elementFromPoint(x, y);
+        if (pointEl && pointEl !== el) {
+            pointEl.dispatchEvent(new MouseEvent('click', opts));
+        }
     } catch (e) {
         try { el.click?.(); } catch (err) {}
     }
@@ -57,10 +63,20 @@ function simulateInput(inputEl, text) {
     if (!inputEl) return;
     inputEl.focus();
     inputEl.value = '';
-    inputEl.value = text;
+    
+    // Set via prototype to trigger Angular/React property descriptor
+    try {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (setter) setter.call(inputEl, text);
+        else inputEl.value = text;
+    } catch (e) {
+        inputEl.value = text;
+    }
+    
+    inputEl.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: text }));
     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-    inputEl.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+    inputEl.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
 }
 
 // Find element with polling
@@ -144,7 +160,6 @@ function findComposer() {
 
 // Helper to click the 'Send to [number]' dropdown suggestion
 function clickSendToSuggestion(phone) {
-    // 1. Direct query of Google Messages custom list item
     try {
         const customItem = document.querySelector('mws-contact-list-item, [role="option"], mat-list-item');
         if (customItem && (customItem.innerText || '').includes('Send to')) {
@@ -153,7 +168,6 @@ function clickSendToSuggestion(phone) {
         }
     } catch (e) {}
 
-    // 2. Query leaf elements with text "Send to"
     try {
         const all = document.querySelectorAll('*');
         for (const el of all) {
@@ -165,6 +179,108 @@ function clickSendToSuggestion(phone) {
         }
     } catch (e) {}
     return false;
+}
+
+// Type message into composer and trigger Angular state updates
+async function typeMessageIntoComposer(composer, message) {
+    composer.focus();
+    await sleep(200);
+
+    const isContentEditable = composer.getAttribute('contenteditable') === 'true' || composer.tagName.toLowerCase() === 'div';
+
+    if (isContentEditable) {
+        composer.innerHTML = '';
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
+        document.execCommand('insertText', false, message);
+        composer.innerText = message;
+        composer.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: message }));
+        composer.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+        composer.value = '';
+        try {
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+            if (setter) setter.call(composer, message);
+            else composer.value = message;
+        } catch (e) {
+            composer.value = message;
+        }
+        
+        // Also run insertText command
+        document.execCommand('insertText', false, message);
+        composer.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: message }));
+        composer.dispatchEvent(new Event('input', { bubbles: true }));
+        composer.dispatchEvent(new Event('change', { bubbles: true }));
+        composer.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
+    }
+
+    await sleep(500);
+}
+
+// Multi-method Send Trigger (Buttons, Child Icons, Coordinate Clicks, and Enter Key)
+async function triggerSend(composer) {
+    const sendButtonSelectors = [
+        'button[data-e2e-send-text-button]',
+        'mws-message-send-button button',
+        'mws-message-send-button',
+        'button[aria-label*="Send SMS" i]',
+        'button[aria-label*="Send RCS" i]',
+        'button[aria-label*="Send message" i]',
+        'button[aria-label*="Send" i]',
+        'button.send-button',
+        'div[data-e2e-send-text-button]'
+    ];
+
+    let clicked = false;
+
+    // 1. Direct query of send button
+    for (const sel of sendButtonSelectors) {
+        try {
+            const btn = document.querySelector(sel);
+            if (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0)) {
+                simulateClick(btn);
+                const icon = btn.querySelector('mat-icon, svg, span') || btn;
+                simulateClick(icon);
+                clicked = true;
+                break;
+            }
+        } catch (e) {}
+    }
+
+    // 2. Query inside compose bar container
+    if (!clicked) {
+        const composeContainer = document.querySelector('mws-message-compose, div.compose-container');
+        if (composeContainer) {
+            const buttons = composeContainer.querySelectorAll('button');
+            for (const b of buttons) {
+                const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                const text = (b.innerText || '').toLowerCase();
+                if (aria.includes('send') || text.includes('send') || b.querySelector('mat-icon, svg')) {
+                    simulateClick(b);
+                    clicked = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // 3. Dispatch Enter key in composer (Google Messages native shortcut)
+    await sleep(300);
+    composer.focus();
+    const enterEventOpts = {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        charCode: 13,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window
+    };
+    composer.dispatchEvent(new KeyboardEvent('keydown', enterEventOpts));
+    composer.dispatchEvent(new KeyboardEvent('keypress', enterEventOpts));
+    composer.dispatchEvent(new KeyboardEvent('keyup', enterEventOpts));
 }
 
 // Core SMS Sender function
@@ -290,67 +406,11 @@ async function sendSms(phone, message) {
             return { success: false, error: 'Could not locate message composer input. Ensure number is valid.' };
         }
 
-        // Enter message into composer
-        composer.focus();
-        await sleep(200);
+        // 1. Enter message into composer with Angular change detection triggers
+        await typeMessageIntoComposer(composer, message);
 
-        const isContentEditable = composer.getAttribute('contenteditable') === 'true' || composer.tagName.toLowerCase() === 'div';
-        if (isContentEditable) {
-            composer.innerText = message;
-            document.execCommand('insertText', false, message);
-            composer.dispatchEvent(new Event('input', { bubbles: true }));
-        } else {
-            composer.value = message;
-            composer.dispatchEvent(new Event('input', { bubbles: true }));
-            composer.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        await sleep(600);
-
-        // Click Send Button
-        const sendButtonSelectors = [
-            'button[data-e2e-send-text-button]',
-            'button[aria-label*="Send SMS" i]',
-            'button[aria-label*="Send RCS" i]',
-            'button[aria-label*="Send message" i]',
-            'button[aria-label*="Send" i]',
-            'mws-message-send-button button',
-            'mws-message-send-button',
-            'div[data-e2e-send-text-button]'
-        ];
-
-        let sendBtn = null;
-        for (const sel of sendButtonSelectors) {
-            try {
-                const btn = document.querySelector(sel);
-                if (btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0) && !btn.disabled) {
-                    sendBtn = btn;
-                    break;
-                }
-            } catch (e) {}
-        }
-
-        // Fallback: search buttons for send icon/text
-        if (!sendBtn) {
-            const allButtons = document.querySelectorAll('button');
-            for (const b of allButtons) {
-                const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                const inner = (b.innerText || '').toLowerCase();
-                if (aria.includes('send') || inner.includes('send')) {
-                    if (b.offsetWidth > 0 && b.offsetHeight > 0 && !b.disabled) {
-                        sendBtn = b;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (sendBtn) {
-            simulateClick(sendBtn);
-        } else {
-            // Fallback: Press Enter in composer
-            composer.focus();
-            composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-        }
+        // 2. Trigger Send via multiple channels (button click, coordinate click, and Enter key)
+        await triggerSend(composer);
 
         await sleep(2000);
 
