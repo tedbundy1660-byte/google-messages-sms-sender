@@ -1,0 +1,23 @@
+[
+  {
+    "id": "tpl-1",
+    "name": "Appointment Reminder (Spintax)",
+    "content": "{Hello|Hi|Hey} {name}, {this is a friendly reminder|just reminding you} about your appointment tomorrow at 10 AM. {Reply YES to confirm|Let us know if you need to reschedule}!",
+    "category": "Reminders",
+    "created_at": "2026-09-03 15:13:16"
+  },
+  {
+    "id": "tpl-2",
+    "name": "Special Offer / Promo",
+    "content": "{Hey|Hi} {name}! {Exclusive deal for you|Special promotion}: Get 20% off your next order with code SAVE20. {Check it out now|Visit our website to claim}!",
+    "category": "Marketing",
+    "created_at": "2026-09-03 15:13:16"
+  },
+  {
+    "id": "tpl-3",
+    "name": "Order Confirmation",
+    "content": "Hello {name}, your order #{phone} has been received and is being processed. Thank you for your business!",
+    "category": "Transactional",
+    "created_at": "2026-09-03 15:13:16"
+  }
+]

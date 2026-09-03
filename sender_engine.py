@@ -190,9 +190,9 @@ class GoogleMessagesEngine:
         await self.log("warning", "Pairing timeout reached. Please scan the QR code when ready.")
         return False
 
-    async def send_sms(self, phone_number: str, message_text: str) -> Tuple[bool, Optional[str]]:
+    async def send_sms(self, phone_number: str, message_text: str, image_path: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """
-        Automates sending an SMS to the specified phone number via Google Messages Web.
+        Automates sending an SMS or MMS to the specified phone number via Google Messages Web.
         """
         async with self._lock:
             if not self.page or self.page.is_closed():
@@ -450,6 +450,31 @@ class GoogleMessagesEngine:
                 else:
                     # Standard textarea
                     await composer.fill(message_text)
+
+                # Attach image file if provided for MMS
+                if image_path and os.path.exists(image_path):
+                    await self.log("info", f"Attaching image for MMS: {os.path.basename(image_path)}")
+                    attached = False
+                    try:
+                        file_input = self.page.locator('input[type="file"]').first
+                        if await file_input.count() > 0:
+                            await file_input.set_input_files(image_path)
+                            attached = True
+                            await asyncio.sleep(2.0)
+                        else:
+                            attach_btn = self.page.locator('button[aria-label*="Attach" i], button[aria-label*="gallery" i], button[aria-label*="plus" i], button[data-e2e-attach-button]').first
+                            if await attach_btn.is_visible(timeout=1500):
+                                async with self.page.expect_file_chooser(timeout=4000) as fc_info:
+                                    await attach_btn.click()
+                                file_chooser = await fc_info.value
+                                await file_chooser.set_files(image_path)
+                                attached = True
+                                await asyncio.sleep(2.0)
+                    except Exception as err:
+                        await self.log("warning", f"Could not attach image: {err}")
+
+                    if attached:
+                        await self.log("info", "MMS image attached successfully.")
 
                 await asyncio.sleep(0.8)
 

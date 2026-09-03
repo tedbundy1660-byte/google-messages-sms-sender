@@ -1,7 +1,9 @@
 import io
+import re
 import sys
 import csv
 import json
+import uuid
 import asyncio
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -15,13 +17,23 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 
-from models import Contact, CampaignConfig, CampaignStats, PairingStatus, MessageStatus
+from models import (
+    Contact,
+    CampaignConfig,
+    CampaignStats,
+    PairingStatus,
+    MessageStatus,
+    SavedTemplate,
+    BlacklistEntry,
+    resolve_spintax,
+    normalize_phone_number
+)
 from sender_engine import GoogleMessagesEngine
 from campaign_manager import CampaignManager
 
-app = FastAPI(title="Google Messages SMS Automator", version="1.0.0")
+app = FastAPI(title="Google Messages SMS Automator Pro", version="2.0.0")
 
-# Enable CORS for flexibility
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,13 +44,13 @@ app.add_middleware(
 
 BASE_DIR = Path(__file__).parent.resolve()
 STATIC_DIR = BASE_DIR / "static"
+UPLOADS_DIR = BASE_DIR / "uploads"
 STATIC_DIR.mkdir(exist_ok=True)
+UPLOADS_DIR.mkdir(exist_ok=True)
 
 # Initialize engines
 engine = GoogleMessagesEngine()
 manager = CampaignManager(engine)
-
-# Pass logger callback from engine to campaign manager
 engine.log_callback = manager.add_log
 
 # WebSocket connection manager
@@ -74,7 +86,6 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     active_websockets.append(websocket)
     try:
-        # Send initial state
         is_paired, status_text = await engine.check_pairing_status()
         await websocket.send_text(json.dumps({
             "type": "init",
@@ -82,6 +93,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 "stats": manager.stats.model_dump(),
                 "contacts": [c.model_dump() for c in manager.contacts],
                 "logs": [l.model_dump() for l in manager.logs[-100:]],
+                "templates": [t.model_dump() for t in manager.get_templates()],
+                "blacklist": [b.model_dump() for b in manager.get_blacklist()],
                 "pairing": {
                     "is_paired": is_paired,
                     "browser_running": engine.page is not None and not engine.page.is_closed(),
@@ -90,7 +103,6 @@ async def websocket_endpoint(websocket: WebSocket):
             }
         }))
         while True:
-            # Keep alive and listen for client commands if any
             data = await websocket.receive_text()
     except WebSocketDisconnect:
         if websocket in active_websockets:
@@ -157,11 +169,140 @@ async def close_browser():
     return {"success": True}
 
 
+# ==========================================
+# MMS Media Upload Endpoint
+# ==========================================
+
+@app.post("/api/upload-media")
+async def upload_media(file: UploadFile = File(...)):
+    """Upload image/flyer/banner for MMS campaigns."""
+    filename = file.filename
+    ext = Path(filename).suffix.lower()
+    if ext not in [".png", ".jpg", ".jpeg", ".gif", ".webp"]:
+        raise HTTPException(status_code=400, detail="Unsupported image format. Allowed: PNG, JPG, JPEG, GIF, WebP.")
+
+    safe_name = f"{uuid.uuid4().hex[:10]}_{filename}"
+    file_path = UPLOADS_DIR / safe_name
+
+    contents = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    rel_url = f"/uploads/{safe_name}"
+    await manager.add_log("info", f"Uploaded media attachment: {filename} ({len(contents)//1024} KB)")
+
+    return {
+        "success": True,
+        "filename": filename,
+        "url": rel_url,
+        "filepath": str(file_path.resolve())
+    }
+
+
+# ==========================================
+# Spintax Preview Endpoint
+# ==========================================
+
+@app.post("/api/spintax/preview")
+async def preview_spintax(payload: Dict[str, Any]):
+    """Generate 5 live variations of a Spintax template with sample contact fields."""
+    template = payload.get("template", "")
+    sample = payload.get("sample", {"name": "John Doe", "phone": "+1234567890"})
+    count = min(int(payload.get("count", 5)), 10)
+
+    variations = []
+    for _ in range(count):
+        text = template
+        for k, v in sample.items():
+            pattern = re.compile(rf"\{{{k}\}}", re.IGNORECASE)
+            text = pattern.sub(str(v), text)
+        variations.append(resolve_spintax(text))
+
+    return {"success": True, "variations": variations}
+
+
+# ==========================================
+# Templates Management Endpoints
+# ==========================================
+
+@app.get("/api/templates")
+async def get_templates():
+    return {"templates": [t.model_dump() for t in manager.get_templates()]}
+
+
+@app.post("/api/templates")
+async def save_template(payload: Dict[str, Any]):
+    name = payload.get("name", "").strip()
+    content = payload.get("content", "").strip()
+    category = payload.get("category", "General").strip()
+    template_id = payload.get("id", None)
+
+    if not name or not content:
+        raise HTTPException(status_code=400, detail="Name and content are required.")
+
+    tpl = manager.save_template(name=name, content=content, category=category, template_id=template_id)
+    await manager.add_log("success", f"Saved template: '{name}'")
+    await manager.broadcast("templates_updated", [t.model_dump() for t in manager.get_templates()])
+    return {"success": True, "template": tpl.model_dump()}
+
+
+@app.delete("/api/templates/{template_id}")
+async def delete_template(template_id: str):
+    deleted = manager.delete_template(template_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Template not found.")
+    await manager.broadcast("templates_updated", [t.model_dump() for t in manager.get_templates()])
+    return {"success": True}
+
+
+# ==========================================
+# Blacklist / DNC Endpoints
+# ==========================================
+
+@app.get("/api/blacklist")
+async def get_blacklist():
+    return {"blacklist": [b.model_dump() for b in manager.get_blacklist()]}
+
+
+@app.post("/api/blacklist")
+async def add_to_blacklist(payload: Dict[str, Any]):
+    phone = payload.get("phone", "").strip()
+    reason = payload.get("reason", "Opted-out / Do Not Contact").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone number is required.")
+
+    entry = manager.add_to_blacklist(phone, reason)
+    await manager.add_log("warning", f"Added {entry.phone} to Blacklist / DNC.")
+    await manager.broadcast("blacklist_updated", [b.model_dump() for b in manager.get_blacklist()])
+    await manager.broadcast("contacts_loaded", [c.model_dump() for c in manager.contacts])
+    return {"success": True, "entry": entry.model_dump()}
+
+
+@app.delete("/api/blacklist/{phone}")
+async def remove_from_blacklist(phone: str):
+    removed = manager.remove_from_blacklist(phone)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Number not in blacklist.")
+    await manager.broadcast("blacklist_updated", [b.model_dump() for b in manager.get_blacklist()])
+    return {"success": True}
+
+
+# ==========================================
+# Contacts & Campaign Endpoints
+# ==========================================
+
 @app.post("/api/contacts/upload")
-async def upload_contacts(file: UploadFile = File(...), template: Optional[str] = Form(None)):
+async def upload_contacts(
+    file: UploadFile = File(...),
+    template: Optional[str] = Form(None),
+    country_code: Optional[str] = Form("+1")
+):
     """Upload CSV or Excel file of contacts."""
     contents = await file.read()
     filename = file.filename.lower()
+
+    if country_code:
+        manager.config.default_country_code = country_code
 
     try:
         if filename.endswith(".csv"):
@@ -169,7 +310,6 @@ async def upload_contacts(file: UploadFile = File(...), template: Optional[str] 
         elif filename.endswith((".xlsx", ".xls")):
             df = pd.read_excel(io.BytesIO(contents))
         elif filename.endswith(".txt"):
-            # Plain text with one phone number per line
             lines = contents.decode("utf-8", errors="ignore").splitlines()
             records = [{"phone": line.strip()} for line in lines if line.strip()]
             df = pd.DataFrame(records)
@@ -181,16 +321,13 @@ async def upload_contacts(file: UploadFile = File(...), template: Optional[str] 
     if df.empty:
         raise HTTPException(status_code=400, detail="The uploaded file contains no data.")
 
-    # Find phone and name columns case-insensitively
     cols = {str(c).strip().lower(): c for c in df.columns}
-    
     phone_col = None
     for candidate in ["phone", "phonenumber", "phone_number", "mobile", "number", "tel", "cell", "contact"]:
         if candidate in cols:
             phone_col = cols[candidate]
             break
     if not phone_col and len(df.columns) > 0:
-        # Default to first column
         phone_col = df.columns[0]
 
     name_col = None
@@ -203,11 +340,10 @@ async def upload_contacts(file: UploadFile = File(...), template: Optional[str] 
     for _, row in df.iterrows():
         raw_phone = str(row[phone_col]).strip() if pd.notna(row[phone_col]) else ""
         if raw_phone.endswith(".0"):
-            raw_phone = raw_phone[:-2]  # Fix float formatting from excel
+            raw_phone = raw_phone[:-2]
         
         raw_name = str(row[name_col]).strip() if name_col and pd.notna(row[name_col]) else ""
         
-        # Build extra custom columns
         custom_fields = {}
         for col_name in df.columns:
             if col_name not in [phone_col, name_col]:
@@ -238,6 +374,10 @@ async def manual_contacts(payload: Dict[str, Any]):
     """Add contacts manually via text input."""
     raw_text = payload.get("text", "")
     template = payload.get("template", None)
+    country_code = payload.get("country_code", "+1")
+
+    if country_code:
+        manager.config.default_country_code = country_code
 
     lines = raw_text.strip().splitlines()
     records = []
@@ -245,7 +385,6 @@ async def manual_contacts(payload: Dict[str, Any]):
         line = line.strip()
         if not line:
             continue
-        # Check if CSV line (e.g. "+1234567890, John Doe")
         if "," in line:
             parts = [p.strip() for p in line.split(",")]
             records.append({"phone": parts[0], "name": parts[1] if len(parts) > 1 else ""})
@@ -266,6 +405,19 @@ async def manual_contacts(payload: Dict[str, Any]):
 @app.get("/api/contacts")
 async def get_contacts():
     return {"contacts": [c.model_dump() for c in manager.contacts]}
+
+
+@app.post("/api/campaign/retry-failed")
+async def retry_failed_campaign():
+    """1-Click retry all failed contacts."""
+    count = manager.retry_failed_contacts()
+    if count == 0:
+        return {"success": True, "count": 0, "message": "No failed contacts to retry."}
+
+    await manager.add_log("info", f"Queued {count} failed contacts back to pending for retry.")
+    await manager.broadcast("contacts_loaded", [c.model_dump() for c in manager.contacts])
+    await manager.broadcast("stats", manager.stats.model_dump())
+    return {"success": True, "count": count, "message": f"Queued {count} contacts for retry."}
 
 
 @app.post("/api/campaign/start")
@@ -333,5 +485,6 @@ async def get_logs():
     return {"logs": [l.model_dump() for l in manager.logs]}
 
 
-# Mount static assets
+# Mount static & uploads directories
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")

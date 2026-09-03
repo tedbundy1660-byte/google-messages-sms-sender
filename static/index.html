@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google Messages SMS Automator</title>
+    <title>Google Messages SMS Automator Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="/static/styles.css">
@@ -11,23 +11,38 @@
 <body class="bg-[#0B0F19] text-gray-100 min-h-screen flex flex-col">
 
     <!-- Top Navigation / Header -->
-    <header class="border-b border-[#1E293B] bg-[#0F172A]/80 backdrop-blur sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+    <header class="border-b border-[#1E293B] bg-[#0F172A]/90 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
                     <i data-lucide="message-square" class="w-5 h-5 text-white"></i>
                 </div>
                 <div>
-                    <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                        Google Messages SMS Automator
-                        <span class="text-xs bg-blue-900/60 text-blue-300 px-2 py-0.5 rounded-full border border-blue-700/50">v1.0</span>
+                    <h1 class="text-base font-bold tracking-tight text-white flex items-center gap-2">
+                        Google Messages SMS Pro
+                        <span class="text-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">v2.0 PRO</span>
                     </h1>
-                    <p class="text-xs text-gray-400">Automated SMS sending with randomized anti-spam delays & live pairing</p>
+                    <p class="text-xs text-gray-400">Anti-Spam Spintax &bull; MMS Media &bull; DNC Blacklist &bull; Smart Batching</p>
                 </div>
             </div>
 
-            <!-- Pairing & Browser Controls -->
-            <div class="flex items-center space-x-3">
+            <!-- Top Tools & Pairing Controls -->
+            <div class="flex items-center space-x-2.5">
+                <!-- Templates Modal Trigger -->
+                <button onclick="openTemplatesModal()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium border border-gray-700 transition">
+                    <i data-lucide="bookmark" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>Templates</span>
+                </button>
+
+                <!-- Blacklist Modal Trigger -->
+                <button onclick="openBlacklistModal()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium border border-gray-700 transition">
+                    <i data-lucide="shield-ban" class="w-3.5 h-3.5 text-rose-400"></i>
+                    <span>DNC Blacklist</span>
+                </button>
+
+                <div class="h-4 w-[1px] bg-gray-700 mx-1"></div>
+
+                <!-- Pairing Badge -->
                 <div id="pairingBadge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-gray-800/80 border border-gray-700 text-xs text-gray-300">
                     <span id="pairingDot" class="w-2.5 h-2.5 rounded-full bg-gray-500"></span>
                     <span id="pairingText" class="font-medium">Checking Status...</span>
@@ -35,40 +50,23 @@
 
                 <button id="btnPairDevice" onclick="openPairingWindow()" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-600/20 transition">
                     <i data-lucide="qr-code" class="w-4 h-4"></i>
-                    <span>Pair Device / Open Browser</span>
+                    <span>Pair Device</span>
                 </button>
 
-                <button id="btnCloseBrowser" onclick="closeBrowser()" title="Close Browser" class="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 transition">
+                <button id="btnCloseBrowser" onclick="closeBrowser()" title="Close Browser Session" class="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 transition">
                     <i data-lucide="power" class="w-4 h-4"></i>
                 </button>
             </div>
         </div>
     </header>
 
-    <!-- Main Container -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Main Dashboard Grid -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5">
 
-        <!-- Left Column: Setup & Configuration (5 cols) -->
-        <div class="lg:col-span-5 space-y-6">
+        <!-- Left Column: Setup & Campaign Builder (5 cols) -->
+        <div class="lg:col-span-5 space-y-5">
 
-            <!-- Step 1: Pairing Quick Guide Notice -->
-            <div class="glass-card p-4 border-l-4 border-l-blue-500">
-                <div class="flex items-start justify-between">
-                    <div class="flex space-x-3">
-                        <i data-lucide="smartphone" class="w-5 h-5 text-blue-400 mt-0.5"></i>
-                        <div>
-                            <h3 class="text-sm font-semibold text-white">How Device Pairing Works</h3>
-                            <p class="text-xs text-gray-400 mt-1 leading-relaxed">
-                                1. Click <b>"Pair Device"</b> to launch Google Messages Web.<br>
-                                2. On your phone, open <b>Messages &gt; Device pairing &gt; QR code scanner</b>.<br>
-                                3. Scan the QR code. Your session is saved locally so you won't need to re-pair!
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 2: Contact Importer -->
+            <!-- Step 1: Contact Importer & Country Code -->
             <div class="glass-card p-5 space-y-4">
                 <div class="flex items-center justify-between border-b border-gray-800 pb-3">
                     <div class="flex items-center space-x-2">
@@ -76,23 +74,39 @@
                         <h2 class="text-sm font-bold text-white uppercase tracking-wider">Contact List</h2>
                     </div>
                     <div class="flex space-x-1 bg-gray-900 p-1 rounded-lg border border-gray-800 text-xs">
-                        <button id="tabUploadBtn" onclick="switchContactTab('upload')" class="px-2.5 py-1 rounded bg-blue-600 text-white font-medium">File Upload</button>
+                        <button id="tabUploadBtn" onclick="switchContactTab('upload')" class="px-2.5 py-1 rounded bg-blue-600 text-white font-medium">Upload File</button>
                         <button id="tabManualBtn" onclick="switchContactTab('manual')" class="px-2.5 py-1 rounded text-gray-400 hover:text-white">Manual Paste</button>
                     </div>
                 </div>
 
+                <!-- Default Country Code Selector -->
+                <div class="flex items-center justify-between text-xs">
+                    <label class="text-gray-400">Default Country Code:</label>
+                    <select id="countryCodeSelect" class="bg-[#161F30] border border-gray-700 rounded-md px-2 py-1 text-xs text-blue-300 font-mono focus:outline-none focus:border-blue-500">
+                        <option value="+1">+1 (USA / Canada)</option>
+                        <option value="+44">+44 (UK)</option>
+                        <option value="+61">+61 (Australia)</option>
+                        <option value="+91">+91 (India)</option>
+                        <option value="+49">+49 (Germany)</option>
+                        <option value="+33">+33 (France)</option>
+                        <option value="+52">+52 (Mexico)</option>
+                        <option value="+81">+81 (Japan)</option>
+                        <option value="">None / Keep Exact</option>
+                    </select>
+                </div>
+
                 <!-- File Upload Tab -->
                 <div id="tabUploadContent" class="space-y-3">
-                    <div id="dropzone" class="border-2 border-dashed border-gray-700 hover:border-blue-500 rounded-xl p-6 text-center cursor-pointer transition bg-gray-900/40" onclick="document.getElementById('fileInput').click()">
+                    <div id="dropzone" class="border-2 border-dashed border-gray-700 hover:border-blue-500 rounded-xl p-5 text-center cursor-pointer transition bg-gray-900/40" onclick="document.getElementById('fileInput').click()">
                         <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.txt" class="hidden" onchange="handleFileUpload(event)">
-                        <div class="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center mx-auto mb-3 text-blue-400">
-                            <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+                        <div class="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center mx-auto mb-2 text-blue-400">
+                            <i data-lucide="upload-cloud" class="w-5 h-5"></i>
                         </div>
-                        <p class="text-sm font-medium text-gray-200">Click to upload or drag & drop</p>
-                        <p class="text-xs text-gray-500 mt-1">Supports CSV, Excel (.xlsx), or TXT (one number per line)</p>
+                        <p class="text-xs font-medium text-gray-200">Click to upload or drag & drop</p>
+                        <p class="text-[11px] text-gray-500 mt-0.5">Supports CSV, Excel (.xlsx), or TXT</p>
                     </div>
                     <div class="flex items-center justify-between text-xs text-gray-400 px-1">
-                        <span>Auto-detects: <code class="text-blue-400 font-mono">phone</code>, <code class="text-blue-400 font-mono">name</code> columns</span>
+                        <span>Auto-normalizes: <code class="text-blue-400 font-mono">(256) 625-5444</code></span>
                         <a href="#" onclick="downloadSampleCSV()" class="text-blue-400 hover:underline flex items-center gap-1"><i data-lucide="download" class="w-3 h-3"></i> Sample CSV</a>
                     </div>
                 </div>
@@ -107,7 +121,9 @@
 
                 <!-- Detected Tags Preview -->
                 <div id="tagContainer" class="pt-2 border-t border-gray-800">
-                    <p class="text-xs text-gray-400 mb-2">Available Dynamic Tags (Click to insert into message):</p>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <p class="text-xs text-gray-400">Dynamic Tags (Click to insert):</p>
+                    </div>
                     <div id="tagPills" class="flex flex-wrap gap-1.5">
                         <button onclick="insertTag('{name}')" class="tag-pill font-mono">{name}</button>
                         <button onclick="insertTag('{phone}')" class="tag-pill font-mono">{phone}</button>
@@ -115,18 +131,65 @@
                 </div>
             </div>
 
-            <!-- Step 3: Message Template Composer -->
+            <!-- Step 2: Message Template & Spintax Composer -->
             <div class="glass-card p-5 space-y-4">
                 <div class="flex items-center justify-between border-b border-gray-800 pb-3">
                     <div class="flex items-center space-x-2">
                         <span class="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 text-xs font-bold flex items-center justify-center border border-blue-500/30">2</span>
-                        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Message Template</h2>
+                        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Message & Spintax</h2>
                     </div>
-                    <span id="charCounter" class="text-xs font-mono text-gray-400">0 chars (1 SMS)</span>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="openSpintaxPreviewModal()" class="flex items-center space-x-1 px-2.5 py-1 rounded bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 text-xs font-semibold transition" title="Preview 5 random Spintax variations">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            <span>Test Spintax</span>
+                        </button>
+                        <span id="charCounter" class="text-xs font-mono text-gray-400">0 chars</span>
+                    </div>
+                </div>
+
+                <!-- Spintax Helper Alert -->
+                <div class="bg-indigo-950/30 border border-indigo-800/40 rounded-lg p-2.5 text-xs text-indigo-200 flex items-start space-x-2">
+                    <i data-lucide="info" class="w-4 h-4 text-indigo-400 shrink-0 mt-0.5"></i>
+                    <div>
+                        <span class="font-semibold text-white">Spintax Enabled:</span> Use <code class="bg-indigo-900/60 text-indigo-300 px-1 py-0.5 rounded font-mono">{Hi|Hello|Hey}</code> to generate unique variations per contact!
+                    </div>
                 </div>
 
                 <div>
-                    <textarea id="messageTemplate" rows="3" oninput="updateTemplatePreview()" placeholder="Hello {name}, your appointment is confirmed for tomorrow!" class="w-full bg-[#161F30] border border-gray-700 rounded-lg p-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 leading-relaxed"></textarea>
+                    <textarea id="messageTemplate" rows="3" oninput="updateTemplatePreview()" placeholder="{Hello|Hi|Hey} {name}, {your appointment is confirmed|just reminding you about our meeting} for tomorrow!" class="w-full bg-[#161F30] border border-gray-700 rounded-lg p-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 leading-relaxed"></textarea>
+                </div>
+
+                <!-- MMS Image Attachment Box -->
+                <div class="pt-2 border-t border-gray-800">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                            <i data-lucide="image" class="w-3.5 h-3.5 text-blue-400"></i>
+                            Attach Image for MMS (Optional)
+                        </span>
+                        <span id="mmsStatus" class="text-[11px] text-gray-500">No media attached</span>
+                    </div>
+
+                    <div id="mediaUploadBox" class="border border-dashed border-gray-700 rounded-lg p-3 text-center cursor-pointer hover:border-blue-500 transition bg-gray-900/30" onclick="document.getElementById('mediaFileInput').click()">
+                        <input type="file" id="mediaFileInput" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" class="hidden" onchange="handleMediaUpload(event)">
+                        <div class="flex items-center justify-center space-x-2 text-xs text-gray-400">
+                            <i data-lucide="file-image" class="w-4 h-4 text-blue-400"></i>
+                            <span>Click to upload image (JPG, PNG, GIF, WebP)</span>
+                        </div>
+                    </div>
+
+                    <!-- Media Thumbnail Preview -->
+                    <div id="mediaPreviewCard" class="hidden mt-2 p-2 rounded-lg bg-gray-900/90 border border-gray-800 flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <img id="mediaThumbnail" src="" alt="Thumbnail" class="w-12 h-12 object-cover rounded border border-gray-700">
+                            <div>
+                                <p id="mediaFileName" class="text-xs font-semibold text-white truncate max-w-[200px]">image.png</p>
+                                <span class="text-[10px] text-emerald-400 font-mono">Ready for MMS</span>
+                            </div>
+                        </div>
+                        <button onclick="removeMediaAttachment()" class="p-1.5 text-gray-400 hover:text-rose-400 transition" title="Remove Attachment">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Live Preview Card -->
@@ -141,12 +204,12 @@
                 </div>
             </div>
 
-            <!-- Step 4: Random Delay & Safety Settings -->
+            <!-- Step 3: Anti-Spam & Batch Safety Settings -->
             <div class="glass-card p-5 space-y-4">
                 <div class="flex items-center justify-between border-b border-gray-800 pb-3">
                     <div class="flex items-center space-x-2">
                         <span class="w-6 h-6 rounded-full bg-blue-600/20 text-blue-400 text-xs font-bold flex items-center justify-center border border-blue-500/30">3</span>
-                        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Anti-Spam & Delay Settings</h2>
+                        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Anti-Spam & Smart Batching</h2>
                     </div>
                     <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
                 </div>
@@ -178,17 +241,17 @@
                         <button onclick="setDelayPreset(5, 15)" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-xs text-gray-300 border border-gray-700">Fast (5-15s)</button>
                     </div>
 
-                    <!-- Batch Cooldown Option -->
+                    <!-- Smart Batch Cooldown Option -->
                     <div class="grid grid-cols-2 gap-4 pt-2 border-t border-gray-800">
                         <div>
                             <label class="block text-xs text-gray-400 mb-1">Batch Size (Optional)</label>
                             <input type="number" id="batchSizeInput" value="0" min="0" placeholder="0 (disabled)" class="w-full bg-[#161F30] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500">
-                            <span class="text-[10px] text-gray-500">0 = no batch pause</span>
+                            <span class="text-[10px] text-gray-500">0 = no batch rest</span>
                         </div>
                         <div>
-                            <label class="block text-xs text-gray-400 mb-1">Batch Pause Duration</label>
-                            <input type="number" id="batchDelayInput" value="120" min="10" placeholder="120" class="w-full bg-[#161F30] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500">
-                            <span class="text-[10px] text-gray-500">seconds to cooldown</span>
+                            <label class="block text-xs text-gray-400 mb-1">Cooldown Duration</label>
+                            <input type="number" id="batchDelayInput" value="300" min="10" placeholder="300" class="w-full bg-[#161F30] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500">
+                            <span class="text-[10px] text-gray-500">seconds (e.g. 300 = 5m)</span>
                         </div>
                     </div>
                 </div>
@@ -196,26 +259,30 @@
 
         </div>
 
-        <!-- Right Column: Dashboard, Queue & Logs (7 cols) -->
-        <div class="lg:col-span-7 space-y-6 flex flex-col">
+        <!-- Right Column: Analytics, Queue & Execution (7 cols) -->
+        <div class="lg:col-span-7 space-y-5 flex flex-col">
 
-            <!-- KPI Metric Cards -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div class="glass-card p-3.5 border-l-4 border-l-blue-500">
-                    <p class="text-xs text-gray-400 font-medium">Total Contacts</p>
-                    <p id="statTotal" class="text-2xl font-extrabold text-white font-mono mt-1">0</p>
+            <!-- KPI Metric Cards (5 Cards) -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                <div class="glass-card p-3 border-l-4 border-l-blue-500">
+                    <p class="text-[11px] text-gray-400 font-medium">Total</p>
+                    <p id="statTotal" class="text-xl font-extrabold text-white font-mono mt-0.5">0</p>
                 </div>
-                <div class="glass-card p-3.5 border-l-4 border-l-emerald-500">
-                    <p class="text-xs text-gray-400 font-medium">Sent (Success)</p>
-                    <p id="statSent" class="text-2xl font-extrabold text-emerald-400 font-mono mt-1">0</p>
+                <div class="glass-card p-3 border-l-4 border-l-emerald-500">
+                    <p class="text-[11px] text-gray-400 font-medium">Sent (✓)</p>
+                    <p id="statSent" class="text-xl font-extrabold text-emerald-400 font-mono mt-0.5">0</p>
                 </div>
-                <div class="glass-card p-3.5 border-l-4 border-l-rose-500">
-                    <p class="text-xs text-gray-400 font-medium">Failed</p>
-                    <p id="statFailed" class="text-2xl font-extrabold text-rose-400 font-mono mt-1">0</p>
+                <div class="glass-card p-3 border-l-4 border-l-rose-500">
+                    <p class="text-[11px] text-gray-400 font-medium">Failed (✗)</p>
+                    <p id="statFailed" class="text-xl font-extrabold text-rose-400 font-mono mt-0.5">0</p>
                 </div>
-                <div class="glass-card p-3.5 border-l-4 border-l-amber-500">
-                    <p class="text-xs text-gray-400 font-medium">Pending Queue</p>
-                    <p id="statPending" class="text-2xl font-extrabold text-amber-400 font-mono mt-1">0</p>
+                <div class="glass-card p-3 border-l-4 border-l-amber-500">
+                    <p class="text-[11px] text-gray-400 font-medium">Pending</p>
+                    <p id="statPending" class="text-xl font-extrabold text-amber-400 font-mono mt-0.5">0</p>
+                </div>
+                <div class="glass-card p-3 border-l-4 border-l-purple-500">
+                    <p class="text-[11px] text-gray-400 font-medium">Blacklisted</p>
+                    <p id="statBlacklisted" class="text-xl font-extrabold text-purple-400 font-mono mt-0.5">0</p>
                 </div>
             </div>
 
@@ -242,10 +309,16 @@
                             <i data-lucide="square" class="w-4 h-4 fill-white"></i>
                             <span>Stop</span>
                         </button>
+
+                        <!-- 1-Click Retry Failed Button -->
+                        <button id="btnRetryFailed" onclick="retryFailedCampaign()" class="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-rose-300 hover:text-rose-200 border border-gray-700 text-xs font-semibold transition" title="Reset and retry only failed contacts">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-rose-400"></i>
+                            <span>Retry Failed</span>
+                        </button>
                     </div>
 
                     <div class="flex items-center space-x-2">
-                        <button onclick="resetCampaign()" title="Reset Status" class="p-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition">
+                        <button onclick="resetCampaign()" title="Reset All to Pending" class="p-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition">
                             <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                         </button>
                         <a href="/api/campaign/export" download title="Export CSV Report" class="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium border border-gray-700 transition">
@@ -266,17 +339,17 @@
                     </div>
                 </div>
 
-                <!-- Countdown & Live Status Widget -->
+                <!-- Countdown & Batch Cooldown Banner -->
                 <div id="countdownBanner" class="hidden flex items-center justify-between bg-blue-950/50 border border-blue-800/60 rounded-lg p-3 text-xs text-blue-200">
                     <div class="flex items-center space-x-2">
-                        <i data-lucide="timer" class="w-4 h-4 text-blue-400 animate-spin"></i>
+                        <i id="countdownIcon" data-lucide="timer" class="w-4 h-4 text-blue-400 animate-spin"></i>
                         <span id="countdownMessage">Waiting next random delay...</span>
                     </div>
                     <span id="countdownTimer" class="font-mono font-bold text-white bg-blue-900/80 px-2.5 py-1 rounded border border-blue-700">0s</span>
                 </div>
             </div>
 
-            <!-- Contacts Queue Table -->
+            <!-- Contacts Queue Table with Filter & Search -->
             <div class="glass-card p-5 space-y-4 flex-1 flex flex-col min-h-[300px]">
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-3">
                     <div class="flex items-center space-x-2">
@@ -284,15 +357,16 @@
                         <h3 class="text-sm font-bold text-white">Contacts Queue</h3>
                     </div>
 
-                    <!-- Search & Filters -->
+                    <!-- Search & Filter Controls -->
                     <div class="flex items-center space-x-2">
-                        <input type="text" id="contactSearch" oninput="filterContactsTable()" placeholder="Search phone or name..." class="bg-[#161F30] border border-gray-700 rounded-md px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500 w-44">
+                        <input type="text" id="contactSearch" oninput="filterContactsTable()" placeholder="Search phone, name..." class="bg-[#161F30] border border-gray-700 rounded-md px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500 w-44">
                         <select id="statusFilter" onchange="filterContactsTable()" class="bg-[#161F30] border border-gray-700 rounded-md px-2.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500">
                             <option value="all">All Status</option>
                             <option value="pending">Pending</option>
                             <option value="sending">Sending</option>
                             <option value="sent">Sent</option>
                             <option value="failed">Failed</option>
+                            <option value="blacklisted">Blacklisted</option>
                         </select>
                     </div>
                 </div>
@@ -305,7 +379,7 @@
                                 <th class="py-2 px-3">#</th>
                                 <th class="py-2 px-3">Recipient</th>
                                 <th class="py-2 px-3">Phone</th>
-                                <th class="py-2 px-3">Message</th>
+                                <th class="py-2 px-3">Message Preview</th>
                                 <th class="py-2 px-3">Status</th>
                                 <th class="py-2 px-3">Sent At / Error</th>
                             </tr>
@@ -319,7 +393,7 @@
                 </div>
             </div>
 
-            <!-- Live Terminal Log Stream -->
+            <!-- Live Terminal Activity Feed -->
             <div class="glass-card p-4 space-y-2">
                 <div class="flex items-center justify-between border-b border-gray-800 pb-2">
                     <div class="flex items-center space-x-2">
@@ -330,7 +404,7 @@
                         <i data-lucide="trash-2" class="w-3 h-3"></i> Clear
                     </button>
                 </div>
-                <div id="terminalLogs" class="bg-[#070A12] border border-gray-900 rounded-lg p-3 font-mono text-xs text-gray-300 max-h-[140px] overflow-y-auto space-y-1">
+                <div id="terminalLogs" class="bg-[#070A12] border border-gray-900 rounded-lg p-3 font-mono text-xs text-gray-300 max-h-[130px] overflow-y-auto space-y-1">
                     <div class="text-gray-500">// System ready. Connect Google Messages and import contacts to begin.</div>
                 </div>
             </div>
@@ -339,9 +413,108 @@
 
     </main>
 
+    <!-- ========================================== -->
+    <!-- Modal 1: Saved Templates Library -->
+    <!-- ========================================== -->
+    <div id="templatesModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[#0F172A] border border-gray-700 rounded-xl w-full max-w-2xl p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="bookmark" class="w-5 h-5 text-amber-400"></i>
+                    <h3 class="text-base font-bold text-white">Templates Library</h3>
+                </div>
+                <button onclick="closeTemplatesModal()" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <!-- Save Current Message as Template -->
+            <div class="bg-gray-900/80 p-3.5 rounded-lg border border-gray-800 space-y-2.5">
+                <p class="text-xs font-semibold text-gray-300">Save Current Editor Content as New Template:</p>
+                <div class="flex items-center space-x-2">
+                    <input type="text" id="newTemplateName" placeholder="Template Name (e.g. VIP Promo)" class="flex-1 bg-[#161F30] border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                    <input type="text" id="newTemplateCategory" placeholder="Category" value="General" class="w-28 bg-[#161F30] border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500">
+                    <button onclick="saveCurrentTemplate()" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold transition">Save</button>
+                </div>
+            </div>
+
+            <!-- Saved Templates List -->
+            <div class="space-y-2 max-h-[300px] overflow-y-auto" id="templatesListContainer">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Modal 2: DNC / Blacklist Manager -->
+    <!-- ========================================== -->
+    <div id="blacklistModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[#0F172A] border border-gray-700 rounded-xl w-full max-w-2xl p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="shield-ban" class="w-5 h-5 text-rose-400"></i>
+                    <h3 class="text-base font-bold text-white">Do Not Contact (DNC) / Blacklist Manager</h3>
+                </div>
+                <button onclick="closeBlacklistModal()" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <p class="text-xs text-gray-400">Numbers in this list are automatically excluded and skipped across all campaigns.</p>
+
+            <!-- Add Number to Blacklist -->
+            <div class="flex items-center space-x-2 bg-gray-900/80 p-3 rounded-lg border border-gray-800">
+                <input type="text" id="blacklistPhoneInput" placeholder="+1234567890" class="flex-1 bg-[#161F30] border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-rose-500">
+                <input type="text" id="blacklistReasonInput" placeholder="Reason (e.g. STOP request)" value="Opted-out" class="w-44 bg-[#161F30] border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-rose-500">
+                <button onclick="addBlacklistEntry()" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold transition">Add Blocked</button>
+            </div>
+
+            <!-- Blacklist Table -->
+            <div class="max-h-[260px] overflow-y-auto">
+                <table class="w-full text-left text-xs">
+                    <thead class="text-gray-400 uppercase bg-gray-900 sticky top-0 border-b border-gray-800">
+                        <tr>
+                            <th class="py-2 px-3">Phone Number</th>
+                            <th class="py-2 px-3">Reason</th>
+                            <th class="py-2 px-3">Added Date</th>
+                            <th class="py-2 px-3 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blacklistTableBody" class="divide-y divide-gray-800 font-mono">
+                        <!-- Dynamically populated -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- Modal 3: Spintax Variations Preview -->
+    <!-- ========================================== -->
+    <div id="spintaxModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="bg-[#0F172A] border border-indigo-700/60 rounded-xl w-full max-w-xl p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-indigo-400"></i>
+                    <h3 class="text-base font-bold text-white">Live Spintax Variations</h3>
+                </div>
+                <button onclick="closeSpintaxPreviewModal()" class="text-gray-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+
+            <p class="text-xs text-gray-400">Here are 5 unique message samples randomly generated from your Spintax template:</p>
+
+            <div id="spintaxVariationsList" class="space-y-2.5 max-h-[300px] overflow-y-auto">
+                <!-- Dynamically populated -->
+            </div>
+
+            <div class="flex justify-end pt-2 border-t border-gray-800">
+                <button onclick="openSpintaxPreviewModal()" class="flex items-center space-x-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    <span>Re-generate Samples</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="border-t border-gray-800/80 bg-[#0F172A]/40 py-3 text-center text-xs text-gray-500">
-        Google Messages SMS Automator &bull; Powered by Playwright Browser Automation
+        Google Messages SMS Automator Pro &bull; 100% Native Playwright Browser Automation &bull; Spintax & MMS Enabled
     </footer>
 
     <script src="/static/app.js"></script>
