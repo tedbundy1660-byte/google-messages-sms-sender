@@ -212,6 +212,8 @@ class CampaignManager:
         """
         1. Replace dynamic tags ({name}, {phone}, {custom_col})
         2. Resolve nested Spintax variations ({Hello|Hi|Hey})
+        3. Append Auto Opt-Out notice if configured
+        4. Enforce Single SMS (160 char) corrector limit if configured
         """
         text = template
         replacements = {
@@ -225,6 +227,24 @@ class CampaignManager:
 
         # Resolve spintax variations
         text = resolve_spintax(text)
+
+        # Auto-append opt-out notice
+        if getattr(self.config, 'auto_optout', False):
+            opt_lower = text.lower()
+            if "stop" not in opt_lower and "unsubscribe" not in opt_lower and "opt out" not in opt_lower:
+                optout_phrase = resolve_spintax(self.config.optout_text or "Reply STOP to opt out")
+                text = f"{text.rstrip()}\n{optout_phrase}"
+
+        # Enforce Single SMS corrector limit (160 chars)
+        if getattr(self.config, 'enforce_single_sms', False):
+            max_len = getattr(self.config, 'max_character_limit', 160) or 160
+            if len(text) > max_len:
+                # Remove excessive whitespace
+                text = re.sub(r'[ \t]+', ' ', text)
+                text = re.sub(r'\n+', '\n', text).strip()
+                if len(text) > max_len:
+                    text = text[:max_len]
+
         return text
 
     def set_contacts(self, raw_contacts: List[Dict[str, Any]], template: Optional[str] = None):

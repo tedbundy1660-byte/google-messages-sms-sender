@@ -94,6 +94,17 @@ class CampaignConfig(BaseModel):
     batch_delay_seconds: Optional[float] = Field(default=300.0, description="Seconds to pause between batches")
     default_country_code: str = Field(default="+1", description="Default country code to prepend if missing")
     headless: bool = Field(default=False, description="Run browser in background after pairing")
+    auto_optout: bool = Field(default=False, description="Automatically append opt-out message")
+    optout_text: str = Field(default="{Reply STOP to opt out|Text STOP to unsubscribe}", description="Opt-out notice phrasing")
+    enforce_single_sms: bool = Field(default=False, description="Strictly limit and correct message to single SMS segment (160 chars)")
+    max_character_limit: int = Field(default=160, description="Max character limit per SMS (160 standard)")
+
+
+class MarketingPromptRequest(BaseModel):
+    topic: str = Field(default="promo", description="Topic: promo, reminder, followup, review, event")
+    business_name: Optional[str] = Field(default="Our Store", description="Business or Brand Name")
+    offer: Optional[str] = Field(default="20% off", description="Offer details or call to action")
+    tone: Optional[str] = Field(default="friendly", description="Tone: friendly, urgent, professional, casual")
 
 
 class SavedTemplate(BaseModel):

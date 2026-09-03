@@ -200,6 +200,64 @@ async def upload_media(file: UploadFile = File(...)):
 
 
 # ==========================================
+# Marketing Content Generator Endpoint
+# ==========================================
+
+@app.post("/api/marketing/generate")
+async def generate_marketing_content(payload: Dict[str, Any]):
+    """Generate high-converting marketing Spintax templates for various campaign goals."""
+    topic = payload.get("topic", "promo").lower()
+    biz = payload.get("business_name", "Our Store").strip() or "Our Store"
+    offer = payload.get("offer", "Special deal").strip() or "Special deal"
+    tone = payload.get("tone", "friendly").lower()
+
+    options = []
+
+    if topic == "promo":
+        options = [
+            f"{{Hey|Hi|Hello}} {{name}}! {biz} has {{an exclusive offer|a special promo|great news}} for you: {offer}. {{Use code SAVE at checkout|Visit our website to claim today|Don't miss out}}! {{Reply STOP to opt out|Text STOP to unsubscribe}}",
+            f"{{Flash Sale|Limited Time Deal|Exclusive Alert}} for {{name}}! Get {offer} at {biz}. {{Shop now before it ends|Claim your discount online}}: {{link}} {{Reply STOP to cancel|Text STOP to opt out}}",
+            f"{{Hi there|Hello}} {{name}}, {{we appreciate you|as a valued customer}}, enjoy {offer} on your next order with {biz}. {{Check it out here|Order now}}! {{Reply STOP to unsubscribe|Text STOP to opt out}}"
+        ]
+    elif topic == "reminder":
+        options = [
+            f"{{Hello|Hi}} {{name}}, {{friendly reminder|just a reminder}} from {biz} regarding your upcoming appointment. {{Please reply YES to confirm|Let us know if you need to reschedule}}! {{Reply STOP to opt out}}",
+            f"{{Hi|Hey}} {{name}}! This is {biz} reminding you about your booking for tomorrow. {{Looking forward to seeing you|See you soon}}! {{Reply STOP to cancel}}",
+            f"{{Reminder|Notice}}: {{name}}, your scheduled time with {biz} is coming up. {{Call us or reply to modify|Confirm by replying YES}}. {{Text STOP to opt out}}"
+        ]
+    elif topic == "followup":
+        options = [
+            f"{{Hey|Hi}} {{name}}, {{just checking in|following up}} from {biz}! {{Did you have any questions about|Were you able to check out}} {offer}? {{Let me know how I can help|Happy to assist}}! {{Reply STOP to opt out}}",
+            f"{{Hello|Hi}} {{name}}, {{hope you're having a great week|hope all is well}}! {biz} is ready to help you with {offer}. {{Reply to this text to get started|Feel free to reach out anytime}}!",
+            f"{{Hi|Hey}} {{name}}, {{quick question from|following up from}} {biz}: Are you still interested in {offer}? {{Let us know|We're here to help}}! {{Reply STOP to unsubscribe}}"
+        ]
+    elif topic == "review":
+        options = [
+            f"{{Hi|Hello}} {{name}}, {{thank you for choosing|thank you for visiting}} {biz}! {{How was your experience|We'd love your feedback}}: {{leave a quick review here|rate us online}}. {{Reply STOP to opt out}}",
+            f"{{Hey|Hi}} {{name}}! {{We hope you loved your experience with|Thank you for shopping at}} {biz}. {{Could you leave us a quick review|Share your thoughts}}: {{link}}! {{Text STOP to opt out}}",
+            f"{{Hello|Hi}} {{name}}, {{your feedback means the world to us|help us improve}} at {biz}. {{Drop us a quick rating|Tell us how we did}}! {{Reply STOP to cancel}}"
+        ]
+    elif topic == "event":
+        options = [
+            f"{{You're Invited|Exclusive Invitation}}, {{name}}! Join {biz} for {offer}. {{RSVP today to reserve your spot|Save your seat online}}! {{Reply STOP to opt out}}",
+            f"{{Hey|Hi}} {{name}}! Don't miss the upcoming {biz} event: {offer}. {{Check the schedule and register|Get your tickets now}}! {{Text STOP to unsubscribe}}",
+            f"{{Special Event Alert}}! {{name}}, {biz} is hosting {offer}. {{Join us this week|Click to learn more}}! {{Reply STOP to cancel}}"
+        ]
+    else:
+        options = [
+            f"{{Hello|Hi|Hey}} {{name}}, {biz} is reaching out with an update on {offer}. {{Reply to this message for details|Let us know how we can assist}}! {{Reply STOP to opt out}}",
+            f"{{Hey|Hi}} {{name}}! {biz} has an update regarding {offer}. {{Let us know if you have questions|Contact us anytime}}! {{Text STOP to unsubscribe}}",
+            f"{{Hello|Hi}} {{name}}, this is {biz}. {offer}. {{Have a great day|Thank you for your time}}! {{Reply STOP to cancel}}"
+        ]
+
+    return {
+        "success": True,
+        "topic": topic,
+        "templates": options
+    }
+
+
+# ==========================================
 # Spintax Preview Endpoint
 # ==========================================
 

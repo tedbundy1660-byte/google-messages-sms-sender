@@ -167,6 +167,53 @@ def test_mms_media_upload():
     assert data["filename"] == "banner.png"
 
 
+def test_marketing_generator_api():
+    payload = {
+        "topic": "promo",
+        "business_name": "Apex Dental",
+        "offer": "50% off teeth whitening",
+        "tone": "friendly"
+    }
+    response = client.post("/api/marketing/generate", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert len(data["templates"]) == 3
+    assert any("Apex Dental" in t for t in data["templates"])
+    assert any("50% off" in t for t in data["templates"])
+
+
+def test_auto_optout_formatting():
+    contact = Contact(id=1, phone="+12566255444", name="Alice")
+    
+    # 1. With auto_optout = True
+    manager.config.auto_optout = True
+    manager.config.optout_text = "Reply STOP to opt out"
+    
+    msg = manager.format_message("Hello {name}, your deal is ready!", contact)
+    assert "Alice" in msg
+    assert "Reply STOP to opt out" in msg
+
+    # 2. If STOP is already in template, do not duplicate
+    msg_dup = manager.format_message("Hello {name}! Text STOP to cancel.", contact)
+    assert msg_dup.count("STOP") == 1
+
+    # Reset
+    manager.config.auto_optout = False
+
+
+def test_single_sms_limit_corrector():
+    contact = Contact(id=1, phone="+12566255444", name="Bob")
+    manager.config.enforce_single_sms = True
+    manager.config.max_character_limit = 160
+
+    # Long message of 250 chars
+    long_template = "Hello {name}, this is a very long marketing promotion text message that contains a lot of unnecessary words and excessive characters that would definitely exceed the standard one hundred and sixty single SMS limit of telecom networks and carriers everywhere."
+    msg = manager.format_message(long_template, contact)
+    
+    assert len(msg) <= 160
+    assert "Bob" in msg
+
 def test_export_csv():
     response = client.get("/api/campaign/export")
     assert response.status_code == 200
@@ -184,7 +231,10 @@ if __name__ == "__main__":
     test_templates_api()
     test_blacklist_api()
     test_spintax_preview_api()
+    test_marketing_generator_api()
+    test_auto_optout_formatting()
+    test_single_sms_limit_corrector()
     test_retry_failed_contacts()
     test_mms_media_upload()
     test_export_csv()
-    print("All 11 tests passed successfully!")
+    print("All 14 tests passed successfully!")

@@ -7,7 +7,7 @@ let appState = {
     pairing: { is_paired: false, browser_running: false, status_text: 'Disconnected' },
     logs: [],
     customHeaders: ['name', 'phone'],
-    mmsAttachment: null // { filename, url, filepath }
+    mmsAttachment: null
 };
 
 let ws = null;
@@ -316,15 +316,15 @@ function resolveSpintaxClient(text) {
     return text;
 }
 
+// Template & Single SMS Corrector
 function updateTemplatePreview() {
     const tpl = document.getElementById('messageTemplate').value;
     const counter = document.getElementById('charCounter');
+    const progressBar = document.getElementById('charProgressBar');
     const previewText = document.getElementById('previewText');
     const previewRecipient = document.getElementById('previewRecipient');
-
-    const len = tpl.length;
-    const smsCount = Math.ceil(len / 160) || 1;
-    counter.innerText = `${len} chars (${smsCount} SMS segment${smsCount > 1 ? 's' : ''})`;
+    const autoOptout = document.getElementById('autoOptoutCheckbox')?.checked;
+    const optoutVal = document.getElementById('optoutSelect')?.value || 'Reply STOP to opt out';
 
     let sampleName = 'John Doe';
     let samplePhone = '+1234567890';
@@ -340,7 +340,71 @@ function updateTemplatePreview() {
         .replace(/\{phone\}/gi, samplePhone);
 
     rendered = resolveSpintaxClient(rendered);
+
+    // Auto-append opt-out to preview if checked
+    if (autoOptout) {
+        const lower = rendered.toLowerCase();
+        if (!lower.includes('stop') && !lower.includes('unsubscribe') && !lower.includes('opt out')) {
+            const optPhrase = resolveSpintaxClient(optoutVal);
+            rendered = `${rendered.trim()}\n${optPhrase}`;
+        }
+    }
+
     previewText.innerText = rendered || '(Enter a message template to see preview)';
+
+    const len = rendered.length;
+    const pct = Math.min((len / 160) * 100, 100);
+
+    if (len <= 160) {
+        counter.innerText = `${len} / 160 chars (1 SMS segment)`;
+        counter.className = 'font-mono font-bold text-emerald-400';
+        progressBar.className = 'bg-emerald-500 h-1.5 rounded-full transition-all duration-200';
+    } else {
+        const segments = Math.ceil(len / 153);
+        counter.innerText = `${len} / 160 chars (${segments} SMS segments - Multi-part)`;
+        counter.className = 'font-mono font-bold text-amber-400';
+        progressBar.className = 'bg-amber-500 h-1.5 rounded-full transition-all duration-200';
+    }
+    progressBar.style.width = `${pct}%`;
+}
+
+// 1-Click Single SMS Corrector & Shortener
+function autoOptimizeSingleSms() {
+    const textarea = document.getElementById('messageTemplate');
+    let text = textarea.value;
+
+    // 1. Remove excess white spaces and blank lines
+    text = text.replace(/[ \t]+/g, ' ');
+    text = text.replace(/\n\s*\n+/g, '\n').trim();
+
+    // 2. Shorten common words/phrases if too long
+    const shortenings = [
+        [/\bplease\b/gi, 'pls'],
+        [/\bappointment\b/gi, 'appt'],
+        [/\bmessage\b/gi, 'msg'],
+        [/\binformation\b/gi, 'info'],
+        [/\btomorrow\b/gi, 'tmrw'],
+        [/\bthanks\b/gi, 'thx'],
+        [/\bthank you\b/gi, 'thanks'],
+        [/\bdiscount\b/gi, 'deal'],
+        [/\breply\b/gi, 'txt']
+    ];
+
+    if (text.length > 160) {
+        for (const [pattern, repl] of shortenings) {
+            text = text.replace(pattern, repl);
+            if (text.length <= 160) break;
+        }
+    }
+
+    // 3. If still over 160, safely trim
+    if (text.length > 160) {
+        text = text.substring(0, 160).trim();
+    }
+
+    textarea.value = text;
+    updateTemplatePreview();
+    appendLog(new Date().toLocaleTimeString(), 'info', '✓ Optimized message to single SMS limit (<= 160 chars).');
 }
 
 // Media Attachment (MMS)
@@ -404,6 +468,9 @@ async function startCampaign() {
     const batchSize = parseInt(document.getElementById('batchSizeInput').value) || 0;
     const batchDelay = parseFloat(document.getElementById('batchDelayInput').value) || 300.0;
     const countryCode = document.getElementById('countryCodeSelect').value;
+    const autoOptout = document.getElementById('autoOptoutCheckbox')?.checked || false;
+    const optoutText = document.getElementById('optoutSelect')?.value || '{Reply STOP to opt out|Text STOP to unsubscribe}';
+    const enforceSingleSms = document.getElementById('enforceSingleSmsCheckbox')?.checked || false;
 
     const config = {
         min_delay_seconds: minDelay,
@@ -412,6 +479,10 @@ async function startCampaign() {
         batch_size: batchSize,
         batch_delay_seconds: batchDelay,
         default_country_code: countryCode,
+        auto_optout: autoOptout,
+        optout_text: optoutText,
+        enforce_single_sms: enforceSingleSms,
+        max_character_limit: 160,
         image_path: appState.mmsAttachment ? appState.mmsAttachment.filepath : null
     };
 
@@ -614,6 +685,61 @@ function appendLog(timestamp, level, message) {
 
 function clearLogs() {
     document.getElementById('terminalLogs').innerHTML = '<div class="text-gray-500">// Activity log cleared.</div>';
+}
+
+// ==========================================
+// AI Marketing Copy Generator Modals
+// ==========================================
+function openMarketingModal() {
+    document.getElementById('marketingModal').classList.remove('hidden');
+    lucide.createIcons();
+}
+
+function closeMarketingModal() {
+    document.getElementById('marketingModal').classList.add('hidden');
+}
+
+async function generateMarketingCopy() {
+    const topic = document.getElementById('mktTopic').value;
+    const business_name = document.getElementById('mktBizName').value.trim();
+    const offer = document.getElementById('mktOffer').value.trim();
+    const tone = document.getElementById('mktTone').value;
+
+    const container = document.getElementById('mktResultsContainer');
+    container.innerHTML = '<p class="text-xs text-purple-400 py-6 text-center animate-pulse">Generating high-converting marketing copy...</p>';
+
+    try {
+        const res = await fetch('/api/marketing/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic, business_name, offer, tone })
+        });
+        const data = await res.json();
+        if (data.success && data.templates) {
+            container.innerHTML = data.templates.map((tpl, idx) => `
+                <div class="p-3 bg-purple-950/30 rounded-lg border border-purple-800/40 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-mono font-bold uppercase text-purple-300">Option #${idx + 1} (${data.topic.toUpperCase()}):</span>
+                        <button onclick="applyMarketingTemplate(${idx})" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-semibold transition">Use Template</button>
+                    </div>
+                    <p id="mkt-tpl-${idx}" class="text-xs text-gray-200 font-sans leading-relaxed italic bg-black/30 p-2 rounded">${escapeHtml(tpl)}</p>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+    } catch (e) {
+        container.innerHTML = `<p class="text-xs text-rose-400 py-4 text-center">Error: ${e.message}</p>`;
+    }
+}
+
+function applyMarketingTemplate(idx) {
+    const el = document.getElementById(`mkt-tpl-${idx}`);
+    if (el) {
+        document.getElementById('messageTemplate').value = el.innerText;
+        updateTemplatePreview();
+        closeMarketingModal();
+        appendLog(new Date().toLocaleTimeString(), 'info', '✓ Applied marketing copy template to editor.');
+    }
 }
 
 // ==========================================
